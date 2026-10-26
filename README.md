@@ -30,7 +30,7 @@ The app runs on the same VM as Pangolin. `docker-compose.yml` is a self-containe
 
 One-time setup:
 
-1. **Registry login.** The image is private. On GitHub, create a classic personal access token with only the `read:packages` scope. In Dockhand, add a registry: `ghcr.io`, your GitHub username, and that token.
+1. **Registry login.** The image is private. On GitHub, create a classic personal access token with only the `read:packages` scope. In Dockhand, go to Settings → Registries and add URL `https://ghcr.io`, your GitHub username, and that token. Then pull `ghcr.io/forrestpowers/timetree-clone:latest` once from Dockhand's Images page; the stack uses the local copy. (Alternatively, make the package public on GitHub and skip the login.)
 2. **Network name.** In Dockhand's networks list (or `docker network ls`), find the network Pangolin's stack created. The Pangolin installer calls it `pangolin`; if yours differs, set `PANGOLIN_NETWORK` in the next step.
 3. **Stack.** In Dockhand, create a stack named `calendar`, paste in `docker-compose.yml`, and set its environment variables:
    - `APP_ORIGIN` (required): your public URL, e.g. `https://cal.example.com`. Passkeys and email links depend on it.
@@ -44,7 +44,7 @@ One-time setup:
 
 To update: push to `main`, wait for the Image workflow to finish, then pull and redeploy the stack in Dockhand.
 
-Without Dockhand: `APP_ORIGIN=https://cal.example.com docker compose up -d` (add `--build` to build the image locally).
+Without Dockhand: `APP_ORIGIN=https://cal.example.com docker compose up -d`. To use a locally built image instead, run `docker build -t ghcr.io/forrestpowers/timetree-clone:latest .` first.
 
 Settings the container already includes:
 

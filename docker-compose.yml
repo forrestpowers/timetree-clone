@@ -8,7 +8,6 @@
 services:
   app:
     image: ghcr.io/forrestpowers/timetree-clone:latest # built by .github/workflows/image.yml
-    build: . # `docker compose build` builds it locally instead
     restart: unless-stopped
     environment:
       APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your public URL, e.g. https://cal.example.com}

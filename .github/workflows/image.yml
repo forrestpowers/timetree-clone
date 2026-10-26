@@ -5,6 +5,8 @@ name: Image
 on:
   push:
     branches: [main]
+    # Docs and the compose file don't change the image
+    paths-ignore: ['**.md', 'docker-compose.yml']
   workflow_dispatch:
 
 permissions:
