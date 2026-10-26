@@ -11,7 +11,7 @@
 		children,
 		class: className = ''
 	}: {
-		kind: 'avatar' | 'cover' | 'background';
+		kind: 'avatar' | 'cover' | 'background' | 'comment';
 		calendarId?: string | null;
 		maxSize?: number;
 		onuploaded: (fileId: string) => void | Promise<void>;

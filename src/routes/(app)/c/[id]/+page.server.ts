@@ -1,11 +1,19 @@
 import { error } from '@sveltejs/kit';
 import { DAY_MS, dateToUtcMs, monthGrid, todayKey } from '#lib/dates.js';
-import { listLabels, listMembers, listVirtualMembers, touchMember } from '#lib/server/calendars.js';
+import {
+	listLabels,
+	listMembers,
+	listVirtualMembers,
+	requireMember,
+	touchMember
+} from '#lib/server/calendars.js';
+import { unreadChat } from '#lib/server/chat.js';
 import { listEvents } from '#lib/server/events.js';
+import { listMemos } from '#lib/server/memos.js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url, parent, cookies, locals, depends }) => {
-	depends('app:events');
+	depends('app:events', 'app:chat', 'app:memos');
 	const { calendars, tz } = await parent();
 	const all = params.id === 'all';
 	const calendar = all ? null : calendars.find((c) => c.id === params.id);
@@ -35,6 +43,8 @@ export const load: PageServerLoad = async ({ params, url, parent, cookies, local
 		events: listEvents(calendarIds, from, to),
 		labels: listLabels(calendarIds),
 		members: listMembers(calendarIds, locals.user!.id),
-		virtualMembers: listVirtualMembers(calendarIds)
+		virtualMembers: listVirtualMembers(calendarIds),
+		memos: listMemos(calendarIds, 10),
+		chatUnread: calendar?.chatEnabled ? unreadChat(requireMember(locals.user!.id, calendar.id)) : 0
 	};
 };

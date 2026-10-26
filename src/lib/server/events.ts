@@ -142,9 +142,14 @@ export const eventInput = z
 export type EventInput = z.output<typeof eventInput>;
 export type EditScope = 'this' | 'future' | 'all';
 type EventRow = typeof events.$inferSelect;
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** The parts of an event that memos share */
+export type ChildInput = Pick<
+	EventInput,
+	'labelId' | 'attendees' | 'alerts' | 'checklist' | 'fileIds'
+>;
 
-function hydrate(rows: EventRow[]): ClientEvent[] {
+export function hydrate(rows: EventRow[]): ClientEvent[] {
 	if (!rows.length) return [];
 	const ids = rows.map((r) => r.id);
 	const attendees = db
@@ -245,9 +250,9 @@ export function getEvent(eventId: string): ClientEvent | null {
 	return row ? hydrate([row])[0] : null;
 }
 
-function validateRefs(
+export function validateRefs(
 	calendarId: string,
-	input: EventInput,
+	input: ChildInput,
 	userId: string,
 	existingEventId?: string
 ) {
@@ -311,7 +316,12 @@ function validateRefs(
 }
 
 /** Replace attendees, alerts, checklist and attachments. Returns files no longer used anywhere. */
-function writeChildren(tx: Tx, eventId: string, input: EventInput, memberId: string): string[] {
+export function writeChildren(
+	tx: Tx,
+	eventId: string,
+	input: ChildInput,
+	memberId: string
+): string[] {
 	tx.delete(eventAttendees).where(eq(eventAttendees.eventId, eventId)).run();
 	tx.delete(eventAlerts).where(eq(eventAlerts.eventId, eventId)).run();
 	const seen = new Set<string>();
@@ -763,7 +773,7 @@ export function copyEvent(
 			logActivity(
 				tx,
 				target.calendarMember.calendarId,
-				member.id,
+				target.calendarMember.id,
 				'event_created',
 				{ title: occ.title, copiedFrom: source.id },
 				id

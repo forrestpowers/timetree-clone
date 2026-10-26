@@ -3,8 +3,14 @@
 # stops Caddy from requesting a certificate). Caddy passes the original Host
 # header through, which the app uses to build its URLs.
 http://cal.example.com {
-	encode zstd gzip
-	reverse_proxy app:3000
+	# Don't compress the live-update stream: compression would buffer it
+	@compressible not path /api/stream
+	encode @compressible zstd gzip
+
+	reverse_proxy app:3000 {
+		# Send server-sent events to the browser immediately
+		flush_interval -1
+	}
 
 	# Make installed phones pick up new versions promptly
 	@sw path /service-worker.js

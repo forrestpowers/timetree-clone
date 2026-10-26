@@ -26,6 +26,10 @@
 	import StickyNote from '@lucide/svelte/icons/sticky-note';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import Users from '@lucide/svelte/icons/users';
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
+	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
+	import ReactionBar from '#lib/components/ReactionBar.svelte';
+	import CommentsThread from '#lib/components/event/CommentsThread.svelte';
 	import { api } from '#lib/api.js';
 	import { formatEventWhen, fileSize, mapsUrl } from '#lib/event-format.js';
 	import { dayCountText, isPinned } from '#lib/event-utils.js';
@@ -236,6 +240,44 @@
 	}
 
 	const otherCalendars = $derived(data.calendars.filter((c) => c.id !== e.calendarId));
+
+	// ---- likes, reactions, comments ----
+	const nameOf = (id: string) => memberById.get(id)?.name ?? 'A former member';
+	async function react(targetType: 'event' | 'comment', targetId: string, emoji: string) {
+		try {
+			await api('/api/reactions', 'POST', { targetType, targetId, emoji });
+			await invalidate('app:event');
+		} catch (err) {
+			toast((err as Error).message, 'error');
+		}
+	}
+
+	const isOwner = $derived(data.calendar.me.role === 'owner');
+
+	async function saveAsMemo() {
+		close();
+		const message = repeating
+			? 'Save as memo? The date and every repeat of this event will be removed.'
+			: 'Save as memo? The date will be removed.';
+		if (!confirm(message)) return;
+		try {
+			await api(`/api/events/${e.id}/to-memo`, 'POST');
+			toast('Saved as memo');
+			goto(`/memos/${e.id}`, { replace: true });
+		} catch (err) {
+			toast((err as Error).message, 'error');
+		}
+	}
+
+	async function discussInChat() {
+		close();
+		try {
+			await api(`/api/calendars/${e.calendarId}/chat`, 'POST', { eventId: e.id });
+			goto(`/c/${e.calendarId}/chat`);
+		} catch (err) {
+			toast((err as Error).message, 'error');
+		}
+	}
 </script>
 
 <svelte:head><title>{e.title}</title></svelte:head>
@@ -259,22 +301,32 @@
 	{/snippet}
 </PageHeader>
 
-<main class="mx-auto max-w-xl pb-16">
+<main class="mx-auto max-w-xl pb-40">
 	<div class="px-5 pt-5 pb-4" style:background="color-mix(in srgb, {color} 16%, var(--surface))">
-		<span
-			class="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold"
-			style:background={color}
-			style:color={textOn(color)}
-		>
-			{label?.name || colorName(color)}
-		</span>
-		<h1 class="mt-2 text-2xl font-bold break-words">{e.title}</h1>
+		{#if label}
+			<span
+				class="mb-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold"
+				style:background={color}
+				style:color={textOn(color)}
+			>
+				{label.name || colorName(color)}
+			</span>
+		{/if}
+		<h1 class="text-2xl font-bold break-words">{e.title}</h1>
 		{#if e.dayCount}
 			<p class="mt-2 flex items-center gap-1.5 text-sm font-semibold text-accent">
 				<Hourglass size={16} />
 				{dayCountText(e.dayCount, day, today)}
 			</p>
 		{/if}
+		<div class="mt-3">
+			<ReactionBar
+				reactions={data.reactions}
+				showLike
+				{nameOf}
+				ontoggle={(emoji) => react('event', e.id, emoji)}
+			/>
+		</div>
 	</div>
 
 	<div class="divide-y divide-border border-y border-border bg-surface">
@@ -395,6 +447,14 @@
 		</div>
 	{/if}
 
+	<CommentsThread
+		eventId={e.id}
+		calendarId={e.calendarId}
+		comments={data.comments}
+		members={data.members}
+		{isOwner}
+	/>
+
 	<p class="px-4 pt-3 text-xs text-muted">
 		{creator ? `Created by ${creator.name} · ` : ''}Created {formatDistanceToNow(e.createdAt, {
 			addSuffix: true
@@ -434,6 +494,14 @@
 					class="text-muted"
 				/> Pin to the top of the day{/if}
 		</button>
+		{#if data.calendar.chatEnabled}
+			<button class="list-row" onclick={discussInChat}
+				><MessageCircle size={20} class="text-muted" /> Discuss in calendar chat</button
+			>
+		{/if}
+		<button class="list-row" onclick={saveAsMemo}
+			><NotebookPen size={20} class="text-muted" /> Save as memo</button
+		>
 		<button class="list-row" onclick={openCopyDates}
 			><CopyPlus size={20} class="text-muted" /> Copy to multiple dates</button
 		>

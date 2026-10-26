@@ -9,6 +9,10 @@
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import Check from '@lucide/svelte/icons/check';
 	import History from '@lucide/svelte/icons/history';
+	import MessageCircle from '@lucide/svelte/icons/message-circle';
+	import NotebookPen from '@lucide/svelte/icons/notebook-pen';
+	import { onMount } from 'svelte';
+	import { formatDistanceToNow } from 'date-fns';
 	import {
 		DAY_MS,
 		dateToUtcMs,
@@ -212,6 +216,30 @@
 		}
 	}
 	const PRESETS = ['Date', 'Dentist', 'Day off', 'Part-time job', 'Lunch', 'Pickup'];
+
+	// Footprints: who else looked at this calendar recently (once per visit per calendar)
+	onMount(() => {
+		if (!data.calendar) return;
+		const key = `footprint:${data.calendar.id}`;
+		try {
+			if (sessionStorage.getItem(key)) return;
+			sessionStorage.setItem(key, '1');
+		} catch {
+			/* storage unavailable */
+		}
+		const since = Date.now() - 12 * 60 * 60 * 1000;
+		const recent = calendarMembers
+			.filter((m) => !m.isMe && m.lastAccessedAt && m.lastAccessedAt > since)
+			.sort((a, b) => b.lastAccessedAt! - a.lastAccessedAt!);
+		if (!recent.length) return;
+		const who =
+			recent.length === 1
+				? recent[0].name
+				: `${recent[0].name} and ${recent.length - 1} other${recent.length > 2 ? 's' : ''}`;
+		toast(
+			`👣 ${who} checked the calendar ${formatDistanceToNow(recent[0].lastAccessedAt!, { addSuffix: true })}`
+		);
+	});
 	const labelColor = (id: string | null) =>
 		data.labels.find((l) => l.id === id)?.color ?? '#9AA3A0';
 
@@ -263,6 +291,15 @@
 						aria-label="Invite members"><UserPlus size={20} /></a
 					>
 				{/if}
+				{#if data.calendar.chatEnabled}
+					<a class="icon-btn relative" href="/c/{data.calendar.id}/chat" aria-label="Calendar chat">
+						<MessageCircle size={20} />
+						{#if data.chatUnread}<span
+								class="absolute top-1 right-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] leading-4 font-bold text-white"
+								>{data.chatUnread}</span
+							>{/if}
+					</a>
+				{/if}
 				<a class="icon-btn" href="/c/{data.calendar.id}/settings" aria-label="Calendar settings"
 					><Settings size={20} /></a
 				>
@@ -302,6 +339,31 @@
 			ondrop={(item, from, to) => (dropping = { item, from, to })}
 		/>
 	</div>
+	{#if data.memos.length}
+		<div
+			class="flex shrink-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto border-t border-border bg-surface px-2 py-1.5"
+		>
+			<a
+				href="/memos?c={data.calendarId}"
+				class="flex shrink-0 items-center gap-1 text-xs font-semibold text-muted"
+				><NotebookPen size={14} /> Memo</a
+			>
+			{#each data.memos as memo (memo.id)}
+				{@const color = data.labels.find((l) => l.id === memo.labelId)?.color ?? '#9AA3A0'}
+				{@const done = memo.checklist.filter((c) => c.done).length}
+				<a
+					href="/memos/{memo.id}"
+					class="flex max-w-40 shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface-2 py-1 pr-2.5 pl-1.5 text-xs"
+				>
+					<span class="size-2.5 shrink-0 rounded-full" style:background={color}></span>
+					<span class="truncate">{memo.title}</span>
+					{#if memo.checklist.length}<span class="shrink-0 text-muted"
+							>{done}/{memo.checklist.length}</span
+						>{/if}
+				</a>
+			{/each}
+		</div>
+	{/if}
 </div>
 
 <a

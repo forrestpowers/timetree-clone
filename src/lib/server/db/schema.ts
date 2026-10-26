@@ -415,3 +415,55 @@ export const activities = sqliteTable(
 		index('activities_event_idx').on(t.eventId, t.createdAt)
 	]
 );
+
+/** Emoji reactions on events, comments and chat messages. "Like" is the ❤️ reaction. */
+export const reactions = sqliteTable(
+	'reactions',
+	{
+		targetType: text('target_type', { enum: ['event', 'comment', 'chat'] }).notNull(),
+		targetId: text('target_id').notNull(),
+		memberId: text('member_id').notNull(),
+		emoji: text('emoji').notNull(),
+		calendarId: text('calendar_id')
+			.notNull()
+			.references(() => calendars.id, { onDelete: 'cascade' }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		primaryKey({ columns: [t.targetType, t.targetId, t.memberId, t.emoji] }),
+		index('reactions_target_idx').on(t.targetType, t.targetId)
+	]
+);
+
+export const chatMessages = sqliteTable(
+	'chat_messages',
+	{
+		id: id(),
+		calendarId: text('calendar_id')
+			.notNull()
+			.references(() => calendars.id, { onDelete: 'cascade' }),
+		memberId: text('member_id').notNull(),
+		// 'text', or 'event' for a "discuss this event" card
+		kind: text('kind', { enum: ['text', 'event'] })
+			.notNull()
+			.default('text'),
+		body: text('body').notNull().default(''),
+		eventId: text('event_id'),
+		createdAt: createdAt(),
+		editedAt: integer('edited_at'),
+		deletedAt: integer('deleted_at')
+	},
+	(t) => [index('chat_cal_idx').on(t.calendarId, t.createdAt)]
+);
+
+/** How far each member has read: the activity feed, chat, memos, or one event's comments. */
+export const readMarkers = sqliteTable(
+	'read_markers',
+	{
+		memberId: text('member_id').notNull(),
+		// 'feed' | 'chat' | 'memos' | 'event:<id>'
+		scope: text('scope').notNull(),
+		lastReadAt: integer('last_read_at').notNull()
+	},
+	(t) => [primaryKey({ columns: [t.memberId, t.scope] })]
+);

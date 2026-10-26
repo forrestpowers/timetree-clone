@@ -104,9 +104,20 @@ What's built:
 
 Moved to Phase 6: "Remind members" needs push notifications.
 
-## Phase 4: collaboration
+## Phase 4: collaboration ✅
 
-Memos (§6), comments, reactions, likes, change history, activity feed with read markers (§7), calendar chat (§8), footprints, live updates over SSE.
+What's built:
+
+- **Live updates:** every change is pushed to open pages over server-sent events (`/api/stream`), so calendars, chat, memos and the activity feed refresh on their own. Caddy must not buffer or compress that path (see `Caddyfile.example`).
+- **Activity tab** with an unread badge. It lists changes across your calendars (or one calendar), groups new items at the top, and shows old and new dates when an event moves.
+- **Comments** on events and memos, with up to 4 photos each. Authors can edit; authors and calendar owners can delete.
+- **Likes and reactions:** a like (❤️) on events and memos shows in the activity feed. Eight emoji reactions work on events, comments and chat messages.
+- **Calendar chat:** messages, shared event cards ("Discuss in calendar chat"), and cards summarising event and memo changes between messages. It has an unread divider and badge, and each message has a sheet with reactions, Copy, Save as memo and Delete.
+- **Memos tab:** quick add, a "new" dot for others' changes, drag to reorder (the order is shared), to-do lists, attachments, comments and labels.
+  - "Add to calendar" turns a memo into an event, keeping its notes, list and comments.
+  - "Save as memo" turns an event back into a memo.
+  - The calendar page shows the latest memos under the month grid.
+- **Footprints:** opening a calendar shows who else looked at it in the last 12 hours, once per visit.
 
 ## Phase 5: views and search
 

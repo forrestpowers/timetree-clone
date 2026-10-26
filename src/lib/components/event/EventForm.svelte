@@ -13,15 +13,12 @@
 	import Tag from '@lucide/svelte/icons/tag';
 	import Users from '@lucide/svelte/icons/users';
 	import Repeat from '@lucide/svelte/icons/repeat';
-	import ListChecks from '@lucide/svelte/icons/list-checks';
-	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Hourglass from '@lucide/svelte/icons/hourglass';
-	import Plus from '@lucide/svelte/icons/plus';
-	import X from '@lucide/svelte/icons/x';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { describeRepeat, isRecurring } from '#lib/recurrence.js';
-	import { fileSize } from '#lib/event-format.js';
 	import RepeatPicker from './RepeatPicker.svelte';
+	import ChecklistEditor from './ChecklistEditor.svelte';
+	import AttachmentsEditor from './AttachmentsEditor.svelte';
 	import { api } from '#lib/api.js';
 	import { dateToUtcMs, timeOf, utcMsToDate, dayKey, zonedToUtc, DAY_MS } from '#lib/dates.js';
 	import { ALL_DAY_ALERTS, TIMED_ALERTS, alertLabel, VIRTUAL_PRESETS } from '#lib/meta.js';
@@ -156,7 +153,6 @@
 	let checklist = $state(init.checklist);
 	let attachedFiles = $state<EventFile[]>(init.files);
 	let dayCount = $state<DayCount | null>(init.dayCount);
-	let newItem = $state('');
 	let uploading = $state(0);
 	let saving = $state(false);
 	let saved = false;
@@ -268,51 +264,6 @@
 		else if (alerts.length < 10) alerts = [...alerts, m].sort((a, b) => a - b);
 	}
 	const alertPresets = $derived(allDay ? ALL_DAY_ALERTS : TIMED_ALERTS);
-
-	// ---- checklist ----
-	function addItem() {
-		const text = newItem.trim();
-		if (!text) return;
-		if (checklist.length >= 100) return toast('No more items can be added.', 'error');
-		checklist = [...checklist, { text: text.slice(0, 200), done: false }];
-		newItem = '';
-	}
-
-	// ---- attachments ----
-	const ACCEPT = '.pdf,.png,.jpg,.jpeg,.heic,.heif,.gif,.txt,.docx,.pptx,.xlsx';
-	async function attach(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		for (const file of [...(input.files ?? [])]) {
-			if (attachedFiles.length >= 10) {
-				toast('Up to 10 files per event.', 'error');
-				break;
-			}
-			if (file.size > 10 * 1024 * 1024) {
-				toast(`${file.name}: the file size exceeds the 10MB limit.`, 'error');
-				continue;
-			}
-			uploading++;
-			try {
-				const form = new FormData();
-				form.set('file', file);
-				form.set('calendarId', calendarId);
-				const res = await api<{ id: string; name: string; size: number }>(
-					'/api/events/attachments',
-					'POST',
-					form
-				);
-				attachedFiles = [
-					...attachedFiles,
-					{ id: res.id, name: res.name, size: res.size, mime: file.type }
-				];
-			} catch (err) {
-				toast(`${file.name}: ${(err as Error).message}`, 'error');
-			} finally {
-				uploading--;
-			}
-		}
-		input.value = '';
-	}
 
 	// ---- double-booking warning ----
 	let conflicts = $state<{ attendeeId: string; title: string }[]>([]);
@@ -464,7 +415,9 @@
 		<button class="list-row" onclick={sheet('label')}>
 			<Tag size={20} class="text-muted" />
 			<span class="size-5 rounded-full" style:background={color}></span>
-			<span class="flex-1 truncate">{label?.name || colorName(color)}</span>
+			<span class="flex-1 truncate"
+				>{label ? label.name || colorName(label.color) : 'No label'}</span
+			>
 			<ChevronRight size={18} class="text-muted" />
 		</button>
 	</div>
@@ -622,70 +575,8 @@
 		</label>
 	</div>
 
-	<p class="section-title flex items-center gap-1.5"><ListChecks size={14} /> To-do list</p>
-	<div class="divide-y divide-border border-y border-border bg-surface">
-		{#each checklist as item, i (i)}
-			<div class="flex items-center gap-3 px-4 py-2">
-				<input
-					type="checkbox"
-					class="size-5 rounded text-accent"
-					bind:checked={item.done}
-					aria-label="Done"
-				/>
-				<input
-					class={[
-						'min-w-0 flex-1 border-0 bg-transparent p-0 focus:ring-0',
-						item.done && 'text-muted line-through'
-					]}
-					maxlength="200"
-					bind:value={item.text}
-				/>
-				<button
-					class="icon-btn size-8 text-muted"
-					onclick={() => (checklist = checklist.filter((_, j) => j !== i))}
-					aria-label="Remove item"><X size={16} /></button
-				>
-			</div>
-		{/each}
-		<form
-			class="flex items-center gap-3 px-4 py-2"
-			onsubmit={(e) => {
-				e.preventDefault();
-				addItem();
-			}}
-		>
-			<Plus size={20} class="text-muted" />
-			<input
-				class="min-w-0 flex-1 border-0 bg-transparent p-0 focus:ring-0"
-				placeholder="Add an item"
-				maxlength="200"
-				bind:value={newItem}
-				onblur={addItem}
-			/>
-		</form>
-	</div>
-
-	<p class="section-title flex items-center gap-1.5"><Paperclip size={14} /> Attachments</p>
-	<div class="divide-y divide-border border-y border-border bg-surface">
-		{#each attachedFiles as f (f.id)}
-			<div class="flex items-center gap-3 px-4 py-2.5">
-				<Paperclip size={18} class="shrink-0 text-muted" />
-				<span class="min-w-0 flex-1 truncate">{f.name}</span>
-				<span class="text-xs text-muted">{fileSize(f.size)}</span>
-				<button
-					class="icon-btn size-8 text-muted"
-					onclick={() => (attachedFiles = attachedFiles.filter((x) => x.id !== f.id))}
-					aria-label="Remove attachment"><X size={16} /></button
-				>
-			</div>
-		{/each}
-		<label class="list-row cursor-pointer text-accent">
-			<Plus size={20} />
-			{uploading ? 'Uploading…' : 'Attach files'}
-			<input type="file" multiple accept={ACCEPT} class="hidden" onchange={attach} />
-		</label>
-	</div>
-	<p class="px-4 pt-2 text-xs text-muted">PDF, images, text and Office files, up to 10 MB each.</p>
+	<ChecklistEditor bind:items={checklist} />
+	<AttachmentsEditor bind:files={attachedFiles} bind:uploading {calendarId} />
 </main>
 
 <Sheet open={open === 'calendar'} onclose={() => (open = null)} title="Calendar">

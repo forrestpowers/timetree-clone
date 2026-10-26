@@ -27,7 +27,7 @@ const filePath = (id: string) => path.join(FILES_DIR, id);
 /** Store an uploaded image (avatar, cover, background). Images are resized in the browser first. */
 export async function saveImage(
 	file: File,
-	kind: Extract<Kind, 'avatar' | 'cover' | 'background'>,
+	kind: Extract<Kind, 'avatar' | 'cover' | 'background' | 'comment'>,
 	ownerUserId: string,
 	calendarId: string | null = null
 ): Promise<string> {

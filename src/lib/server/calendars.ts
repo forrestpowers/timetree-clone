@@ -15,6 +15,7 @@ import {
 	type CalendarPurpose
 } from '#lib/server/db/schema.js';
 import type { ClientCalendar, ClientLabel, ClientMember, ClientVirtualMember } from '#lib/types.js';
+import { publish, type LiveKind } from '#lib/server/live.js';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Db = typeof db | Tx;
@@ -61,7 +62,23 @@ export function logActivity(
 	eventId: string | null = null
 ) {
 	tx.insert(activities).values({ calendarId, actorMemberId, type, data, eventId }).run();
+	publish({ calendarId, kinds: LIVE_KINDS[type], eventId, actorMemberId });
 }
+
+const LIVE_KINDS: Record<ActivityType, LiveKind[]> = {
+	event_created: ['events', 'feed', 'event'],
+	event_updated: ['events', 'feed', 'event'],
+	event_deleted: ['events', 'feed', 'event'],
+	memo_created: ['memos', 'feed', 'event'],
+	memo_updated: ['memos', 'feed', 'event'],
+	memo_deleted: ['memos', 'feed', 'event'],
+	comment: ['feed', 'event'],
+	like: ['feed', 'event'],
+	member_joined: ['calendars', 'feed', 'events'],
+	member_left: ['calendars', 'feed', 'events'],
+	member_removed: ['calendars', 'feed', 'events'],
+	calendar_updated: ['calendars', 'feed', 'events']
+};
 
 export type NewLabel = { name: string; color: string; externalId?: number | null };
 

@@ -136,3 +136,37 @@ export type VirtualEntry = {
 	date: string;
 	calendarId?: string;
 };
+
+export type ClientActivity = {
+	id: string;
+	calendarId: string;
+	eventId: string | null;
+	actorMemberId: string | null;
+	type: import('#lib/server/db/schema.js').ActivityType;
+	data: Record<string, unknown>;
+	createdAt: number;
+	updatedAt: number;
+	/** The event as it is now (title may have changed since) */
+	event: { title: string; kind: 'event' | 'memo'; deleted: boolean } | null;
+};
+
+export type ReactionSummary = { emoji: string; count: number; mine: boolean; memberIds: string[] };
+
+export type ClientChatMessage = {
+	id: string;
+	calendarId: string;
+	memberId: string;
+	kind: 'text' | 'event';
+	body: string;
+	event: {
+		id: string;
+		title: string;
+		startAt: number | null;
+		allDay: boolean;
+		startTz: string;
+	} | null;
+	reactions: ReactionSummary[];
+	createdAt: number;
+	editedAt: number | null;
+	deleted: boolean;
+};
