@@ -63,37 +63,58 @@ export function logActivity(
 	tx.insert(activities).values({ calendarId, actorMemberId, type, data, eventId }).run();
 }
 
-export function createCalendar(userId: string, input: { name: string; purpose: CalendarPurpose }) {
+export type NewLabel = { name: string; color: string; externalId?: number | null };
+
+export function assertCanCreateCalendar(userId: string) {
 	const count = db
 		.select({ n: sql<number>`count(*)` })
 		.from(calendarMembers)
 		.where(and(eq(calendarMembers.userId, userId), isNull(calendarMembers.removedAt)))
 		.get()!.n;
 	if (count >= MAX_CALENDARS) error(400, 'You have reached the maximum number of calendars.');
+}
 
-	return db.transaction((tx) => {
-		const calendar = tx
-			.insert(calendars)
-			.values({ name: input.name, purpose: input.purpose, createdByUserId: userId })
-			.returning()
-			.get();
-		const maxOrder =
-			tx
-				.select({ m: sql<number>`coalesce(max(sort_order), -1)` })
-				.from(calendarMembers)
-				.where(eq(calendarMembers.userId, userId))
-				.get()?.m ?? -1;
-		const member = tx
-			.insert(calendarMembers)
-			.values({ calendarId: calendar.id, userId, role: 'owner', sortOrder: maxOrder + 1 })
-			.returning()
-			.get();
-		tx.insert(labels)
-			.values(LABEL_COLORS.map((c, i) => ({ calendarId: calendar.id, color: c.hex, sortOrder: i })))
-			.run();
-		logActivity(tx, calendar.id, member.id, 'member_joined');
-		return calendar;
-	});
+/** Insert a calendar owned by `userId`, inside an existing transaction. */
+export function insertCalendar(
+	tx: Tx,
+	userId: string,
+	input: { name: string; purpose: CalendarPurpose },
+	initialLabels: NewLabel[] = LABEL_COLORS.map((c) => ({ name: '', color: c.hex }))
+) {
+	const calendar = tx
+		.insert(calendars)
+		.values({ name: input.name, purpose: input.purpose, createdByUserId: userId })
+		.returning()
+		.get()!;
+	const maxOrder =
+		tx
+			.select({ m: sql<number>`coalesce(max(sort_order), -1)` })
+			.from(calendarMembers)
+			.where(eq(calendarMembers.userId, userId))
+			.get()?.m ?? -1;
+	const member = tx
+		.insert(calendarMembers)
+		.values({ calendarId: calendar.id, userId, role: 'owner', sortOrder: maxOrder + 1 })
+		.returning()
+		.get()!;
+	tx.insert(labels)
+		.values(
+			initialLabels.map((l, i) => ({
+				calendarId: calendar.id,
+				name: l.name,
+				color: l.color,
+				externalId: l.externalId ?? null,
+				sortOrder: i
+			}))
+		)
+		.run();
+	logActivity(tx, calendar.id, member.id, 'member_joined');
+	return { calendar, member };
+}
+
+export function createCalendar(userId: string, input: { name: string; purpose: CalendarPurpose }) {
+	assertCanCreateCalendar(userId);
+	return db.transaction((tx) => insertCalendar(tx, userId, input).calendar);
 }
 
 export function listUserCalendars(userId: string): ClientCalendar[] {

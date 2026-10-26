@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { APP_NAME } from '$app/env/public';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import FileUp from '@lucide/svelte/icons/file-up';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import LayoutList from '@lucide/svelte/icons/layout-list';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -75,6 +76,10 @@
 		>
 		<a class="list-row" href="/settings/security"
 			><KeyRound size={20} class="text-muted" /><span class="flex-1">Passkeys &amp; devices</span
+			><ChevronRight size={18} class="text-muted" /></a
+		>
+		<a class="list-row" href="/settings/import"
+			><FileUp size={20} class="text-muted" /><span class="flex-1">Import from TimeTree</span
 			><ChevronRight size={18} class="text-muted" /></a
 		>
 	</div>

@@ -15,7 +15,7 @@ Legend: **[core]** must have · **[later]** planned in a later phase · **[web-a
 - **[core]** Password rules: 8–64 characters, at least two of letters/numbers/symbols, strength meter, confirmation must match
 - **[core]** "Log out of all devices" (revokes every session)
 - **[core]** Delete account, with a reason picker
-- **[core]** Passkeys (WebAuthn) as an alternative login *(default chosen; change if you like)*
+- **[core]** Passkeys (WebAuthn) as an alternative login _(default chosen; change if you like)_
 - **[later]** Sign in with Google / Apple (TimeTree has both; both need OAuth app registration)
 - **[core]** Global profile: name, photo, birthday plus a "display birthday" toggle, one-line status ("Current status")
 - **[core]** **Per-calendar profile**: optionally use a different name and photo in a specific calendar ("Calendar profile"). Chosen when joining a calendar ("Select profile → New profile")
@@ -119,7 +119,7 @@ In TimeTree a memo is an event with `category = 2`: it has no date.
 - **[core]** Per-calendar setting to **strip location data** from uploads
 - **[core]** Album activity in the feed ("X added 5 photos to the album")
 - **[later]** "On this day N years ago" memories
-- **[web-adapted]** TimeTree's *Photo Suggest* scans your camera roll for photos taken during events. A web app can't read the photo library in the background, so this becomes a suggestion at upload time based on EXIF dates.
+- **[web-adapted]** TimeTree's _Photo Suggest_ scans your camera roll for photos taken during events. A web app can't read the photo library in the background, so this becomes a suggestion at upload time based on EXIF dates.
 
 ## 10. Calendar views
 
@@ -154,8 +154,8 @@ In TimeTree a memo is an event with `category = 2`: it has no date.
 
 ## 13. External calendars, import and export
 
-- **[web-adapted]** TimeTree reads the iPhone's Calendar app (EventKit) to *display* and *import* events. A web app can't, so the clone offers:
-  - **Subscribe to ICS URLs** (Google/Apple/school/sports feeds) shown as read-only overlay calendars in the filter bar *(default chosen: this replaces Public Calendars)*
+- **[web-adapted]** TimeTree reads the iPhone's Calendar app (EventKit) to _display_ and _import_ events. A web app can't, so the clone offers:
+  - **Subscribe to ICS URLs** (Google/Apple/school/sports feeds) shown as read-only overlay calendars in the filter bar _(default chosen: this replaces Public Calendars)_
   - **Import an .ics file** into a calendar, mapping its categories to labels (TimeTree's `ImportCalendarLabel`)
 - **[core]** **ICS export feed**: a secret per-user URL for each calendar, or for all of them, to subscribe to from Apple or Google Calendar
 - **[core]** **Full backup export** (JSON plus attachments zip) and restore
@@ -167,7 +167,7 @@ In TimeTree a memo is an event with `category = 2`: it has no date.
 - **[later]** **Share card**: render a 2-week or 1-month calendar as a styled image, with a header image, background/text colors, displayed info and style options
 - **[later]** **Label statistics**: a chart of events per label, shareable as an image
 
-## 15. AI features *(default chosen: on when an Anthropic API key is configured)*
+## 15. AI features _(default chosen: on when an Anthropic API key is configured)_
 
 - **[later]** **Scan an image → events**: a photo or screenshot of a school schedule, shift table or planner becomes a batch of events to confirm. Includes "More events detected, scan more?" and cancel. Replaces TimeTree's image-scan share extension; the PWA registers as a **share target** for images.
 - **[later]** **Voice → events**: dictate ("dentist tomorrow at 3pm"), up to 10 events at once, confirmed before saving. Uses the browser's speech recognition or uploaded audio.
@@ -197,38 +197,38 @@ In TimeTree a memo is an event with `category = 2`: it has no date.
 
 ## Not cloned
 
-| TimeTree feature | Why not |
-|---|---|
-| Ads, ad hiding/reporting, tracking consent (ATT), reward-video ads | It's your app |
-| TimeTree Premium paywall | Its features (vertical view, pin events, file attachments) are free for everyone here |
-| Rewards/points, offerwall, Gifts (e-gift purchases), Store | Commercial partner features |
-| "Today" page (news, weather, horoscope, time sales, COVID stats), Tokubai flyers | Japan-only partner content |
-| Event Discovery / trending / campaigns / hashtags | Depends on TimeTree's global user base |
-| Public Calendars platform (publish, follow, likes, analytics, admin invites, paid widgets) | Replaced by ICS subscribe/export *(default chosen; can be revisited)* |
-| Friends list and "Shared Events" | TimeTree itself discontinued Shared Events |
-| Assistant | TimeTree itself discontinued it |
-| Facebook / Kakao / LINE SDK integrations | Replaced by the Web Share API |
-| NPS surveys, review prompts, "cheering", usage diagnosis, demographics, marketing banners, guided tours | Growth/marketing tooling |
-| ToS / privacy / guideline consent gates, parental consent | Private family deployment |
-| Zendesk inquiry forms, TimeTree Lab toggles | Not needed |
+| TimeTree feature                                                                                        | Why not                                                                               |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Ads, ad hiding/reporting, tracking consent (ATT), reward-video ads                                      | It's your app                                                                         |
+| TimeTree Premium paywall                                                                                | Its features (vertical view, pin events, file attachments) are free for everyone here |
+| Rewards/points, offerwall, Gifts (e-gift purchases), Store                                              | Commercial partner features                                                           |
+| "Today" page (news, weather, horoscope, time sales, COVID stats), Tokubai flyers                        | Japan-only partner content                                                            |
+| Event Discovery / trending / campaigns / hashtags                                                       | Depends on TimeTree's global user base                                                |
+| Public Calendars platform (publish, follow, likes, analytics, admin invites, paid widgets)              | Replaced by ICS subscribe/export _(default chosen; can be revisited)_                 |
+| Friends list and "Shared Events"                                                                        | TimeTree itself discontinued Shared Events                                            |
+| Assistant                                                                                               | TimeTree itself discontinued it                                                       |
+| Facebook / Kakao / LINE SDK integrations                                                                | Replaced by the Web Share API                                                         |
+| NPS surveys, review prompts, "cheering", usage diagnosis, demographics, marketing banners, guided tours | Growth/marketing tooling                                                              |
+| ToS / privacy / guideline consent gates, parental consent                                               | Private family deployment                                                             |
+| Zendesk inquiry forms, TimeTree Lab toggles                                                             | Not needed                                                                            |
 
 ## Data model mapping (TimeTree Core Data → clone)
 
-| TimeTree entity | Clone table(s) |
-|---|---|
-| Calendar, CalendarDisplayPreference | `calendars`, `calendar_settings` |
-| CalendarUser | `calendar_members` (role, per-calendar profile, last_accessed_at) |
-| CalendarVirtualUser | `virtual_members` |
-| CalendarLabel | `labels` |
-| Event (category 1/2, type 0/1) | `events` (kind: event/memo/birthday), `event_attendees`, `event_alerts`, `event_checklist_items`, `event_files`, `event_pins` |
-| EventActivity | `activities` (comment, system change, like, reaction) |
-| EventLocation | `saved_locations` |
-| EventHistory | `event_templates` (quick-create history) |
-| CalendarMediaContent | `album_photos`, `album_photo_events` |
-| CalendarSticker, Sticker | `date_stickers` |
-| FilterCalendarItem | `user_calendar_filters` (incl. ICS subscriptions) |
-| ImportCalendarLabel | `ics_label_mappings` |
-| Memorialday | computed from `date-holidays` |
-| — (chat) | `chat_messages`, `chat_reactions`, `read_markers` |
-| — (day counter) | `day_counters` |
-| — (push, feeds) | `push_subscriptions`, `ics_tokens`, `sessions`, `passkeys` |
+| TimeTree entity                     | Clone table(s)                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Calendar, CalendarDisplayPreference | `calendars`, `calendar_settings`                                                                                              |
+| CalendarUser                        | `calendar_members` (role, per-calendar profile, last_accessed_at)                                                             |
+| CalendarVirtualUser                 | `virtual_members`                                                                                                             |
+| CalendarLabel                       | `labels`                                                                                                                      |
+| Event (category 1/2, type 0/1)      | `events` (kind: event/memo/birthday), `event_attendees`, `event_alerts`, `event_checklist_items`, `event_files`, `event_pins` |
+| EventActivity                       | `activities` (comment, system change, like, reaction)                                                                         |
+| EventLocation                       | `saved_locations`                                                                                                             |
+| EventHistory                        | `event_templates` (quick-create history)                                                                                      |
+| CalendarMediaContent                | `album_photos`, `album_photo_events`                                                                                          |
+| CalendarSticker, Sticker            | `date_stickers`                                                                                                               |
+| FilterCalendarItem                  | `user_calendar_filters` (incl. ICS subscriptions)                                                                             |
+| ImportCalendarLabel                 | `ics_label_mappings`                                                                                                          |
+| Memorialday                         | computed from `date-holidays`                                                                                                 |
+| — (chat)                            | `chat_messages`, `chat_reactions`, `read_markers`                                                                             |
+| — (day counter)                     | `day_counters`                                                                                                                |
+| — (push, feeds)                     | `push_subscriptions`, `ics_tokens`, `sessions`, `passkeys`                                                                    |

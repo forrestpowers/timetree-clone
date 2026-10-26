@@ -3,6 +3,7 @@
 See [FEATURES.md](FEATURES.md) for the full feature list. Section numbers below refer to it.
 
 ## Stack
+
 - SvelteKit (TypeScript) on Node, PWA (manifest, service worker, share target)
 - SQLite via Drizzle ORM; uploads on a mounted volume
 - Sessions with email+password (argon2) and passkeys (`@simplewebauthn`)
@@ -13,6 +14,7 @@ See [FEATURES.md](FEATURES.md) for the full feature list. Section numbers below 
 - Single Docker image plus `docker-compose.yml`
 
 ## Deployment: Cloudflare Tunnel → Caddy → app
+
 Path: `cloudflared` → `http://caddy:80` → `app:3000`, all on one Docker network. No ports open on the host.
 
 ```
@@ -20,9 +22,11 @@ http://cal.example.com {
 	reverse_proxy app:3000
 }
 ```
+
 Cloudflare handles TLS at its edge, so Caddy listens on plain HTTP. The `http://` prefix stops Caddy from trying to get its own certificate.
 
 What the app has to handle:
+
 - **Public URL**: set `APP_ORIGIN=https://cal.example.com`. Passkeys are tied to that exact hostname, and email and invite links use it. SvelteKit 3 dropped the old `ORIGIN` variable and builds the request origin from the Host header, which Caddy passes through unchanged.
 - **Client IP**: `ADDRESS_HEADER=cf-connecting-ip` (already set in the Dockerfile) is used for login rate limiting and the device list.
 - **Live updates (SSE)**: Cloudflare cuts responses that send nothing for 100 seconds, so the server sends a heartbeat every 25 seconds. The client reconnects automatically. Stream responses carry `Cache-Control: no-cache, no-transform`.
@@ -33,43 +37,71 @@ What the app has to handle:
 - **Outbound traffic** (web push, SMTP, Anthropic API) doesn't go through the tunnel.
 
 Cloudflare dashboard settings:
+
 - Turn **Rocket Loader** off; it breaks SvelteKit hydration.
 - **Email Address Obfuscation** can rewrite emails shown on the page; turn it off or ignore it.
-- If you put **Cloudflare Access** in front of the app, add a *Bypass* policy for `/feeds/*`. Apple and Google Calendar fetch ICS feeds from their own servers and can't pass an Access login. Also expect the installed iPhone app to show Access's login page each time its cookie expires; the app's own login makes Access optional.
+- If you put **Cloudflare Access** in front of the app, add a _Bypass_ policy for `/feeds/*`. Apple and Google Calendar fetch ICS feeds from their own servers and can't pass an Access login. Also expect the installed iPhone app to show Access's login page each time its cookie expires; the app's own login makes Access optional.
 - **Bot Fight Mode** can block Google Calendar's feed fetcher; skip it for `/feeds/*` or turn it off.
 
 ## Phase 0: before anything else
+
 Run the TimeTree export with raw JSON, once per calendar:
 `timetree-exporter -c CODE -o timetree.ics --include-comments --include-images --raw-output-dir raw-timetree`
 
 ## Phase 1: foundation ✅ (branch `phase-1-foundation`)
+
 Accounts and profiles (§1), calendars (§2), invitations, members and virtual members (§3), labels and palette (§4), event CRUD with time zones, location, alerts, attendees (§5 core fields), month view plus day list (§10), settings basics (§16), PWA shell and tabs (§17), Docker.
 
 Notes from building it:
+
 - SvelteKit 3 and Drizzle 1.0 RC (`node-sqlite` driver, so there's no native SQLite module).
 - Alerts are stored per event. They're delivered in Phase 6.
 - The Docker image hasn't been built yet because Docker Desktop wasn't running. The production Node build was tested directly.
 
-## Phase 2: TimeTree import
-Import from the raw JSON: calendars, labels, members (mapped onto real or virtual members), events, memos, birthdays, recurrences and exceptions, alerts, comments, images. Verify by comparing counts with the exporter.
+## Phase 2: TimeTree import ✅
+
+**More → Import from TimeTree** takes the per-calendar JSON files from the export (`timetree_cal_<id>.json`), shows a preview, and imports into a new or existing calendar.
+
+What it brings over:
+- Labels, mapped by TimeTree label id and then by color.
+- Events and memos, with all-day/timed handling, time zones, location and coordinates, URL, note and reminders.
+- Repeat rules and links between exceptions and their series.
+- The original created and updated times.
+- TimeTree users, each mapped to "me", a virtual member, or left out.
+
+Behavior:
+- Re-importing skips events already imported, matched by TimeTree UUID.
+- Deleted events are skipped. Birthdays are skipped too, because the app generates them from profiles.
+- The JSON export has no comments or images, so those can't be imported.
+
+Verified against the real export (calendar 26406140): 2,561 events, 1,030 all-day, 700 reminder rows, 93 notes and 10 labels, all matching the source file. A re-import added 0. Timed events show the correct local time in Chicago and New York zones.
+
+The export's other file, "Primary Calendar" (26406130), was deleted in TimeTree and contains no events.
 
 ## Phase 3: the rest of events
+
 Recurrence editing (this/future/all), checklists, file attachments, pins, day counters, copy and multi-date copy, drag/drop, quick-create history, double-booking warning, folded duplicates, share as text/QR, remind members, birthdays (§5).
 
 ## Phase 4: collaboration
+
 Memos (§6), comments, reactions, likes, change history, activity feed with read markers (§7), calendar chat (§8), footprints, live updates over SSE.
 
 ## Phase 5: views and search
+
 Week, 2-week, list, daily sheet, vertical 1/3/7-day timeline, height modes, font size, week numbers, holidays, stickers (§10), search (§11).
 
 ## Phase 6: notifications and sync
+
 Web push for alerts, Today's Events digest, per-calendar notification modes, activity/chat pushes, day-counter pushes (§12); ICS subscribe overlay, .ics import, ICS export feeds, JSON backup and restore (§13).
 
 ## Phase 7: album and sharing
+
 Album with photo↔event links and location stripping (§9); available-dates image, share card, label stats (§14).
 
 ## Phase 8: AI (only when a key is configured)
+
 Image scan to events (including PWA share target), voice to events, AI checklists (§15).
 
 ## Phase 9: polish
+
 Lunar/rokuyo display, memo templates, personal API tokens, i18n, Google/Apple sign-in if wanted.

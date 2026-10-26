@@ -12,9 +12,8 @@ import {
 	virtualMembers
 } from '#lib/server/db/schema.js';
 import { logActivity, type Member } from '#lib/server/calendars.js';
+import { LIMITS } from '#lib/server/events-limits.js';
 import type { ClientEvent } from '#lib/types.js';
-
-export const LIMITS = { title: 100, location: 200, url: 2000, note: 10_000, alerts: 10 };
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const time = z.string().regex(/^\d{2}:\d{2}$/);
