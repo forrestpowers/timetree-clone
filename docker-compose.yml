@@ -1,6 +1,7 @@
 # The app as a Dockhand stack, served by Pangolin on the same machine.
-# The app joins Pangolin's pangolin_frontend network as "calendar-app", so a
-# Pangolin resource on the local site can target http://calendar-app:3000.
+# The app container, "calendar-app", joins Pangolin's pangolin_frontend
+# network, so a Pangolin resource on the local site can target
+# http://calendar-app:3000.
 # No ports are published on the host.
 #
 # Set APP_ORIGIN (required) and the optional variables below as stack
@@ -8,6 +9,7 @@
 services:
   app:
     image: ghcr.io/forrestpowers/timetree-clone:latest # built by .github/workflows/image.yml
+    container_name: calendar-app # the hostname Pangolin targets
     restart: unless-stopped
     environment:
       APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your public URL, e.g. https://cal.example.com}
@@ -18,9 +20,7 @@ services:
     volumes:
       - app_data:/data # SQLite database and uploaded files. Back this volume up.
     networks:
-      pangolin_frontend:
-        aliases:
-          - calendar-app
+      - pangolin_frontend
 
 networks:
   pangolin_frontend:
