@@ -1,0 +1,12 @@
+# cloudflared forwards https://cal.example.com to http://caddy:80.
+# Cloudflare terminates TLS, so this site is plain HTTP (the http:// prefix
+# stops Caddy from requesting a certificate). Caddy passes the original Host
+# header through, which the app uses to build its URLs.
+http://cal.example.com {
+	encode zstd gzip
+	reverse_proxy app:3000
+
+	# Make installed phones pick up new versions promptly
+	@sw path /service-worker.js
+	header @sw Cache-Control "no-cache"
+}

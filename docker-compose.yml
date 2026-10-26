@@ -1,0 +1,20 @@
+# Runs the app behind your existing Caddy + cloudflared setup.
+# Caddy must be on the same Docker network (here: "web") and proxy to app:3000.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: https://cal.example.com # your public URL (passkeys and email links depend on it)
+      APP_NAME: Calendar
+      SIGNUP_MODE: invite # only the first user, or someone with an invite link, can sign up
+      # SMTP_URL: smtps://user:pass@smtp.example.com:465
+      # MAIL_FROM: Calendar <calendar@example.com>
+    volumes:
+      - ./data:/data # SQLite database and uploaded files. Back this folder up.
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
