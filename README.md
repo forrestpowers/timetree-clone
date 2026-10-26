@@ -26,10 +26,15 @@ Useful scripts:
 
 ## Deploy (Docker, Caddy, Cloudflare Tunnel)
 
-1. Edit `docker-compose.yml`: set `APP_ORIGIN` to your public URL, and SMTP settings if you want real emails.
-2. Make sure Caddy is on the same Docker network (`web` in the example) and add the site from `Caddyfile.example`.
-3. Point your cloudflared tunnel's public hostname at `http://caddy:80`.
+`docker-compose.yml` runs the app and Caddy together; only Caddy's port 80 is published. A Debian LXC from the Proxmox community "Docker" script works well (2 cores, 2 GB RAM, 10–16 GB disk, static IP).
+
+1. Clone the repository on the server.
+2. Edit `docker-compose.yml`: set `APP_ORIGIN` to your public URL, and SMTP settings if you want real emails.
+3. Create the data folder for the app's user (uid 1000): `mkdir -p data && chown 1000:1000 data`.
 4. Run `docker compose up -d --build`.
+5. Point your cloudflared tunnel's public hostname at `http://<server IP>:80`.
+
+To update: `git pull && docker compose up -d --build`.
 
 Settings the container already includes:
 

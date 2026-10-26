@@ -15,15 +15,9 @@ See [FEATURES.md](FEATURES.md) for the full feature list. Section numbers below 
 
 ## Deployment: Cloudflare Tunnel → Caddy → app
 
-Path: `cloudflared` → `http://caddy:80` → `app:3000`, all on one Docker network. No ports open on the host.
+Path: `cloudflared` → `http://<server IP>:80` (Caddy) → `app:3000`. Caddy and the app run together from `docker-compose.yml`; only Caddy's port 80 is published, and the app is reachable only on the internal Compose network. The target is a Debian 13 Docker LXC on Proxmox (community "Docker" script, unprivileged).
 
-```
-http://cal.example.com {
-	reverse_proxy app:3000
-}
-```
-
-Cloudflare handles TLS at its edge, so Caddy listens on plain HTTP. The `http://` prefix stops Caddy from trying to get its own certificate.
+Cloudflare handles TLS at its edge, so Caddy listens on plain HTTP. The `Caddyfile` answers on `:80` for any hostname (only the tunnel reaches it), so the domain is set in one place: `APP_ORIGIN`.
 
 What the app has to handle:
 

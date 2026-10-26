@@ -1,8 +1,8 @@
-# cloudflared forwards https://cal.example.com to http://caddy:80.
-# Cloudflare terminates TLS, so this site is plain HTTP (the http:// prefix
-# stops Caddy from requesting a certificate). Caddy passes the original Host
-# header through, which the app uses to build its URLs.
-http://cal.example.com {
+# cloudflared forwards https://<your domain> to http://<this machine>:80.
+# Cloudflare terminates TLS, so Caddy serves plain HTTP. It answers for any
+# hostname (only the tunnel reaches it) and passes the original Host header
+# through, which the app uses to build its URLs.
+:80 {
 	# Don't compress the live-update stream: compression would buffer it
 	@compressible not path /api/stream
 	encode @compressible zstd gzip

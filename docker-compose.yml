@@ -1,5 +1,6 @@
-# Runs the app behind your existing Caddy + cloudflared setup.
-# Caddy must be on the same Docker network (here: "web") and proxy to app:3000.
+# The app and Caddy together. Point your cloudflared tunnel's public hostname
+# at http://<this machine's IP>:80. Only Caddy is published; the app stays on
+# the internal network.
 services:
   app:
     build: .
@@ -12,9 +13,19 @@ services:
       # MAIL_FROM: Calendar <calendar@example.com>
     volumes:
       - ./data:/data # SQLite database and uploaded files. Back this folder up.
-    networks:
-      - web
 
-networks:
-  web:
-    external: true
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
