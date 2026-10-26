@@ -26,21 +26,20 @@ Useful scripts:
 
 ## Deploy (Oracle Cloud, Dockhand, Pangolin)
 
-The app runs on the same VM as Pangolin. `docker-compose.yml` is a self-contained Dockhand stack: it joins Pangolin's Docker network as `calendar-app` and publishes no ports. Every push to `main` builds `ghcr.io/forrestpowers/timetree-clone:latest` for amd64 and arm64 (see `.github/workflows/image.yml`).
+The app runs on the same VM as Pangolin. `docker-compose.yml` is a self-contained Dockhand stack: it joins Pangolin's `pangolin_frontend` Docker network as `calendar-app` and publishes no ports. Every push to `main` builds the public image `ghcr.io/forrestpowers/timetree-clone:latest` for amd64 and arm64 (see `.github/workflows/image.yml`), so no registry login is needed.
 
 One-time setup:
 
-1. **Registry login.** The image is private. On GitHub, create a classic personal access token with only the `read:packages` scope. In Dockhand, go to Settings → Registries and add URL `https://ghcr.io`, your GitHub username, and that token. Then pull `ghcr.io/forrestpowers/timetree-clone:latest` once from Dockhand's Images page; the stack uses the local copy. (Alternatively, make the package public on GitHub and skip the login.)
-2. **Network name.** In Dockhand's networks list (or `docker network ls`), find the network Pangolin's stack created. The Pangolin installer calls it `pangolin`; if yours differs, set `PANGOLIN_NETWORK` in the next step.
-3. **Stack.** In Dockhand, create a stack named `calendar`, paste in `docker-compose.yml`, and set its environment variables:
+1. **Network.** Check that Pangolin's stack created the `pangolin_frontend` network (Dockhand's networks list, or `docker network ls`) and that Traefik or Gerbil is attached to it. If your network has another name, change it in `docker-compose.yml`.
+2. **Stack.** In Dockhand, create a stack named `calendar`, paste in `docker-compose.yml`, and set its environment variables:
    - `APP_ORIGIN` (required): your public URL, e.g. `https://cal.example.com`. Passkeys and email links depend on it.
-   - Optional: `PANGOLIN_NETWORK`, `APP_NAME`, `SIGNUP_MODE`, `SMTP_URL`, `MAIL_FROM` (see the table below).
-4. **Deploy** the stack.
-5. **Pangolin resource.** In the Pangolin dashboard:
+   - Optional: `APP_NAME`, `SIGNUP_MODE`, `SMTP_URL`, `MAIL_FROM` (see the table below).
+3. **Deploy** the stack.
+4. **Pangolin resource.** In the Pangolin dashboard:
    - Add an HTTP resource for your subdomain (e.g. `cal`) on the local site. If you don't have a local site yet, add one under Sites with the type _Local_.
    - Add a target: method `http`, host `calendar-app`, port `3000`.
    - Under Authentication, turn off platform SSO. The app has its own login, and calendar feed fetchers (Phase 6) can't pass Pangolin's.
-6. Open the site and create the first account. It becomes the founding user.
+5. Open the site and create the first account. It becomes the founding user.
 
 To update: push to `main`, wait for the Image workflow to finish, then pull and redeploy the stack in Dockhand.
 

@@ -15,7 +15,7 @@ See [FEATURES.md](FEATURES.md) for the full feature list. Section numbers below 
 
 ## Deployment: Pangolin → app (Oracle Cloud, Dockhand)
 
-Path: visitor → Pangolin's Traefik (TLS) → `http://calendar-app:3000` over Pangolin's Docker network. Pangolin and the app run on the same Oracle Cloud VM. The app is a Dockhand stack from `docker-compose.yml` that joins the external `pangolin` network under the alias `calendar-app` and publishes no host ports. GitHub Actions builds the image for amd64 and arm64 (Oracle's free Ampere shapes) to `ghcr.io/forrestpowers/timetree-clone` on every push to `main`.
+Path: visitor → Pangolin's Traefik (TLS) → `http://calendar-app:3000` over Pangolin's Docker network. Pangolin and the app run on the same Oracle Cloud VM. The app is a Dockhand stack from `docker-compose.yml` that joins Pangolin's external `pangolin_frontend` network under the alias `calendar-app` and publishes no host ports. GitHub Actions builds the public image for amd64 and arm64 (Oracle's free Ampere shapes) to `ghcr.io/forrestpowers/timetree-clone` on every push to `main`.
 
 What the app has to handle:
 

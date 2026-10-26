@@ -1,7 +1,7 @@
 # The app as a Dockhand stack, served by Pangolin on the same machine.
-# The app joins Pangolin's Docker network as "calendar-app", so a Pangolin
-# resource on the local site can target http://calendar-app:3000. No ports
-# are published on the host.
+# The app joins Pangolin's pangolin_frontend network as "calendar-app", so a
+# Pangolin resource on the local site can target http://calendar-app:3000.
+# No ports are published on the host.
 #
 # Set APP_ORIGIN (required) and the optional variables below as stack
 # environment variables, or in a .env file next to this file.
@@ -18,14 +18,13 @@ services:
     volumes:
       - app_data:/data # SQLite database and uploaded files. Back this volume up.
     networks:
-      pangolin:
+      pangolin_frontend:
         aliases:
           - calendar-app
 
 networks:
-  pangolin:
-    external: true
-    name: ${PANGOLIN_NETWORK:-pangolin} # the network Pangolin's own stack created
+  pangolin_frontend:
+    external: true # created by Pangolin's own stack
 
 volumes:
   app_data:
