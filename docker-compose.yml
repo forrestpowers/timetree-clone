@@ -1,7 +1,7 @@
-# The app and Caddy in one stack, self-contained so it can be pasted into
-# Dockhand (or run with `docker compose up -d`). Point your cloudflared
-# tunnel's public hostname at http://<this machine's IP>:80. Only Caddy is
-# published; the app stays on the stack's internal network.
+# The app as a Dockhand stack, served by Pangolin on the same machine.
+# The app joins Pangolin's Docker network as "calendar-app", so a Pangolin
+# resource on the local site can target http://calendar-app:3000. No ports
+# are published on the host.
 #
 # Set APP_ORIGIN (required) and the optional variables below as stack
 # environment variables, or in a .env file next to this file.
@@ -18,43 +18,15 @@ services:
       MAIL_FROM: ${MAIL_FROM:-} # e.g. Calendar <calendar@example.com>
     volumes:
       - app_data:/data # SQLite database and uploaded files. Back this volume up.
+    networks:
+      pangolin:
+        aliases:
+          - calendar-app
 
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - '80:80'
-    configs:
-      - source: caddyfile
-        target: /etc/caddy/Caddyfile
-    volumes:
-      - caddy_data:/data
-      - caddy_config:/config
-
-configs:
-  # Cloudflare terminates TLS, so Caddy serves plain HTTP. It answers for any
-  # hostname (only the tunnel reaches it) and passes the original Host header
-  # through, which the app uses to build its URLs.
-  caddyfile:
-    content: |
-      :80 {
-      	# Don't compress the live-update stream: compression would buffer it
-      	@compressible not path /api/stream
-      	encode @compressible zstd gzip
-
-      	reverse_proxy app:3000 {
-      		# Send server-sent events to the browser immediately
-      		flush_interval -1
-      	}
-
-      	# Make installed phones pick up new versions promptly
-      	@sw path /service-worker.js
-      	header @sw Cache-Control "no-cache"
-      }
+networks:
+  pangolin:
+    external: true
+    name: ${PANGOLIN_NETWORK:-pangolin} # the network Pangolin's own stack created
 
 volumes:
   app_data:
-  caddy_data:
-  caddy_config:

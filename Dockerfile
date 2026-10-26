@@ -1,5 +1,7 @@
 # ---- build ----
-FROM node:24-slim AS build
+# Runs on the build machine's own architecture: the output is plain JavaScript and the
+# production dependencies have no native code, so it works on both amd64 and arm64.
+FROM --platform=$BUILDPLATFORM node:24-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -13,7 +15,8 @@ ENV NODE_ENV=production \
 	PORT=3000 \
 	DATA_DIR=/data \
 	BODY_SIZE_LIMIT=12M \
-	ADDRESS_HEADER=cf-connecting-ip
+	ADDRESS_HEADER=x-forwarded-for \
+	XFF_DEPTH=1
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/drizzle ./drizzle

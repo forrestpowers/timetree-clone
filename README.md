@@ -24,19 +24,22 @@ Useful scripts:
 - `npm run db:generate -- --name <change>`: create a migration after editing `src/lib/server/db/schema.ts` (migrations run automatically when the app starts)
 - `python3 scripts/make-icons.py`: regenerate the app icons
 
-## Deploy (Dockhand, Caddy, Cloudflare Tunnel)
+## Deploy (Oracle Cloud, Dockhand, Pangolin)
 
-`docker-compose.yml` is one self-contained stack: the app plus Caddy, with the Caddyfile inline and named volumes, so it can be pasted straight into Dockhand. Only Caddy's port 80 is published. Every push to `main` builds `ghcr.io/forrestpowers/timetree-clone:latest` (see `.github/workflows/image.yml`).
+The app runs on the same VM as Pangolin. `docker-compose.yml` is a self-contained Dockhand stack: it joins Pangolin's Docker network as `calendar-app` and publishes no ports. Every push to `main` builds `ghcr.io/forrestpowers/timetree-clone:latest` for amd64 and arm64 (see `.github/workflows/image.yml`).
 
 One-time setup:
 
 1. **Registry login.** The image is private. On GitHub, create a classic personal access token with only the `read:packages` scope. In Dockhand, add a registry: `ghcr.io`, your GitHub username, and that token.
-2. **Stack.** In Dockhand, create a stack named `calendar` and paste in `docker-compose.yml`.
-3. **Environment variables** on the stack:
+2. **Network name.** In Dockhand's networks list (or `docker network ls`), find the network Pangolin's stack created. The Pangolin installer calls it `pangolin`; if yours differs, set `PANGOLIN_NETWORK` in the next step.
+3. **Stack.** In Dockhand, create a stack named `calendar`, paste in `docker-compose.yml`, and set its environment variables:
    - `APP_ORIGIN` (required): your public URL, e.g. `https://cal.example.com`. Passkeys and email links depend on it.
-   - Optional: `APP_NAME`, `SIGNUP_MODE`, `SMTP_URL`, `MAIL_FROM` (see the table below).
+   - Optional: `PANGOLIN_NETWORK`, `APP_NAME`, `SIGNUP_MODE`, `SMTP_URL`, `MAIL_FROM` (see the table below).
 4. **Deploy** the stack.
-5. **Tunnel.** Point your cloudflared public hostname at `http://<LXC IP>:80`.
+5. **Pangolin resource.** In the Pangolin dashboard:
+   - Add an HTTP resource for your subdomain (e.g. `cal`) on the local site. If you don't have a local site yet, add one under Sites with the type _Local_.
+   - Add a target: method `http`, host `calendar-app`, port `3000`.
+   - Under Authentication, turn off platform SSO. The app has its own login, and calendar feed fetchers (Phase 6) can't pass Pangolin's.
 6. Open the site and create the first account. It becomes the founding user.
 
 To update: push to `main`, wait for the Image workflow to finish, then pull and redeploy the stack in Dockhand.
@@ -46,16 +49,9 @@ Without Dockhand: `APP_ORIGIN=https://cal.example.com docker compose up -d` (add
 Settings the container already includes:
 
 - `BODY_SIZE_LIMIT=12M`, for photo and file uploads.
-- `ADDRESS_HEADER=cf-connecting-ip`, so login rate limiting sees real client IPs.
+- `ADDRESS_HEADER=x-forwarded-for` and `XFF_DEPTH=1`, so login rate limiting sees the client IP that Pangolin's Traefik recorded.
 
-Cloudflare dashboard settings:
-
-- Turn **Rocket Loader** off.
-- If you use Cloudflare Access or Bot Fight Mode, exempt `/feeds/*` (calendar feeds arrive in a later phase).
-
-Private files are served with `Cache-Control: private`, so Cloudflare never caches them.
-
-**Back up the `app_data` volume.** It holds the database (`app.db`) and every uploaded file. It lives under `/var/lib/docker/volumes/` on the LXC, so Proxmox backups of the container include it.
+**Back up the `app_data` volume.** It holds the database (`app.db`) and every uploaded file. On the VM it's under `/var/lib/docker/volumes/calendar_app_data/_data` (the prefix is the stack name).
 
 ## Environment variables
 

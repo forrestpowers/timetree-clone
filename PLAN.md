@@ -13,29 +13,24 @@ See [FEATURES.md](FEATURES.md) for the full feature list. Section numbers below 
 - Optional: Anthropic API key enables the AI features (§15)
 - Single Docker image plus `docker-compose.yml`
 
-## Deployment: Cloudflare Tunnel → Caddy → app
+## Deployment: Pangolin → app (Oracle Cloud, Dockhand)
 
-Path: `cloudflared` → `http://<server IP>:80` (Caddy) → `app:3000`. Caddy and the app run together as one Dockhand stack from `docker-compose.yml`, which is self-contained (inline Caddyfile, named volumes). Only Caddy's port 80 is published, and the app is reachable only on the stack's internal network. The target is a Docker LXC on Proxmox managed with Dockhand. GitHub Actions builds the image to `ghcr.io/forrestpowers/timetree-clone` on every push to `main`.
-
-Cloudflare handles TLS at its edge, so Caddy listens on plain HTTP. The Caddyfile answers on `:80` for any hostname (only the tunnel reaches it), so the domain is set in one place: `APP_ORIGIN`.
+Path: visitor → Pangolin's Traefik (TLS) → `http://calendar-app:3000` over Pangolin's Docker network. Pangolin and the app run on the same Oracle Cloud VM. The app is a Dockhand stack from `docker-compose.yml` that joins the external `pangolin` network under the alias `calendar-app` and publishes no host ports. GitHub Actions builds the image for amd64 and arm64 (Oracle's free Ampere shapes) to `ghcr.io/forrestpowers/timetree-clone` on every push to `main`.
 
 What the app has to handle:
 
-- **Public URL**: set `APP_ORIGIN=https://cal.example.com`. Passkeys are tied to that exact hostname, and email and invite links use it. SvelteKit 3 dropped the old `ORIGIN` variable and builds the request origin from the Host header, which Caddy passes through unchanged.
-- **Client IP**: `ADDRESS_HEADER=cf-connecting-ip` (already set in the Dockerfile) is used for login rate limiting and the device list.
-- **Live updates (SSE)**: Cloudflare cuts responses that send nothing for 100 seconds, so the server sends a heartbeat every 25 seconds. The client reconnects automatically. Stream responses carry `Cache-Control: no-cache, no-transform`.
-- **Private files**: Cloudflare caches anything ending in `.jpg`, `.pdf` and so on by default, cookies or not. Photos and attachments are served from `/files/<id>` (no file extension) with `Cache-Control: private`, so Cloudflare never stores them. The phone's own browser cache still keeps them, which keeps avatars fast.
+- **Public URL**: set `APP_ORIGIN=https://cal.example.com`. Passkeys are tied to that exact hostname, and email and invite links use it. SvelteKit 3 builds the request origin from the Host header, which Traefik passes through unchanged.
+- **Client IP**: `ADDRESS_HEADER=x-forwarded-for` with `XFF_DEPTH=1` (set in the Dockerfile) takes the address Traefik saw, for login rate limiting and the device list. The app is reachable only from Pangolin's network, so the header can't be spoofed by connecting directly. If a CDN proxy is ever put in front of Pangolin, raise `XFF_DEPTH` to skip it.
+- **Live updates (SSE)**: Traefik streams `text/event-stream` responses without buffering. The server sends a heartbeat every 25 seconds so idle connections aren't dropped, and the client reconnects automatically. Stream responses carry `Cache-Control: no-cache, no-transform`.
+- **Private files**: photos and attachments are served from `/files/<id>` with `Cache-Control: private`.
 - **Upload size**: `BODY_SIZE_LIMIT=12M` (set in the Dockerfile). The Node adapter's default is only 512 KB.
-- **Service worker**: `sw.js` is served `no-cache` so updates reach installed phones.
-- **Uploads**: Cloudflare's free plan allows request bodies up to 100 MB. Attachments are capped at 10 MB and album photos upload one request each, so this isn't a problem.
-- **Outbound traffic** (web push, SMTP, Anthropic API) doesn't go through the tunnel.
+- **Compression**: the Node adapter serves pre-compressed (gzip and brotli) static assets on its own.
+- **Service worker**: browsers fetch the service worker script past the HTTP cache by default, so updates reach installed phones without special headers.
 
-Cloudflare dashboard settings:
+Pangolin resource settings:
 
-- Turn **Rocket Loader** off; it breaks SvelteKit hydration.
-- **Email Address Obfuscation** can rewrite emails shown on the page; turn it off or ignore it.
-- If you put **Cloudflare Access** in front of the app, add a _Bypass_ policy for `/feeds/*`. Apple and Google Calendar fetch ICS feeds from their own servers and can't pass an Access login. Also expect the installed iPhone app to show Access's login page each time its cookie expires; the app's own login makes Access optional.
-- **Bot Fight Mode** can block Google Calendar's feed fetcher; skip it for `/feeds/*` or turn it off.
+- Target: the local site, `http` to `calendar-app` port `3000`.
+- Turn off Pangolin's own authentication (platform SSO) for this resource. The app has its own login, and Apple and Google Calendar fetch ICS feeds (`/feeds/*`, Phase 6) from their own servers, which can't pass a Pangolin login. If you keep Pangolin auth, add a bypass rule for `/feeds/*` and expect the installed iPhone app to show Pangolin's login whenever its session expires.
 
 ## Phase 0: before anything else
 
@@ -102,7 +97,7 @@ Moved to Phase 6: "Remind members" needs push notifications.
 
 What's built:
 
-- **Live updates:** every change is pushed to open pages over server-sent events (`/api/stream`), so calendars, chat, memos and the activity feed refresh on their own. Caddy must not buffer or compress that path (see the Caddyfile in `docker-compose.yml`).
+- **Live updates:** every change is pushed to open pages over server-sent events (`/api/stream`), so calendars, chat, memos and the activity feed refresh on their own. The reverse proxy must not buffer that path; Pangolin's Traefik streams it as is.
 - **Activity tab** with an unread badge. It lists changes across your calendars (or one calendar), groups new items at the top, and shows old and new dates when an event moves.
 - **Comments** on events and memos, with up to 4 photos each. Authors can edit; authors and calendar owners can delete.
 - **Likes and reactions:** a like (❤️) on events and memos shows in the activity feed. Eight emoji reactions work on events, comments and chat messages.
