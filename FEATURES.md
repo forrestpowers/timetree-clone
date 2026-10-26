@@ -1,6 +1,6 @@
 # TimeTree clone: feature spec
 
-Source: TimeTree iOS 15.33.0 (decrypted IPA). Derived from 3,591 English UI strings, the Core Data model (V113, 25 entities), the API paths in the binaries, and the four app extensions. This spec describes behavior to reimplement; no TimeTree code, artwork, icons or branding is reused.
+Source: a study of how the TimeTree iOS app (version 15.33.0) works: its screens, settings, widgets and other extensions. This spec describes behavior to reimplement; no TimeTree code, artwork, icons or branding is reused.
 
 Target: self-hosted, mobile-first PWA for a family or small group. One Docker container, SQLite.
 
@@ -212,9 +212,9 @@ In TimeTree a memo is an event with `category = 2`: it has no date.
 | ToS / privacy / guideline consent gates, parental consent                                               | Private family deployment                                                             |
 | Zendesk inquiry forms, TimeTree Lab toggles                                                             | Not needed                                                                            |
 
-## Data model mapping (TimeTree Core Data → clone)
+## Data model mapping (TimeTree concepts → clone)
 
-| TimeTree entity                     | Clone table(s)                                                                                                                |
+| TimeTree concept                    | Clone table(s)                                                                                                                |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Calendar, CalendarDisplayPreference | `calendars`, `calendar_settings`                                                                                              |
 | CalendarUser                        | `calendar_members` (role, per-calendar profile, last_accessed_at)                                                             |
