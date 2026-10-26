@@ -24,17 +24,24 @@ Useful scripts:
 - `npm run db:generate -- --name <change>`: create a migration after editing `src/lib/server/db/schema.ts` (migrations run automatically when the app starts)
 - `python3 scripts/make-icons.py`: regenerate the app icons
 
-## Deploy (Docker, Caddy, Cloudflare Tunnel)
+## Deploy (Dockhand, Caddy, Cloudflare Tunnel)
 
-`docker-compose.yml` runs the app and Caddy together; only Caddy's port 80 is published. A Debian LXC from the Proxmox community "Docker" script works well (2 cores, 2 GB RAM, 10–16 GB disk, static IP).
+`docker-compose.yml` is one self-contained stack: the app plus Caddy, with the Caddyfile inline and named volumes, so it can be pasted straight into Dockhand. Only Caddy's port 80 is published. Every push to `main` builds `ghcr.io/forrestpowers/timetree-clone:latest` (see `.github/workflows/image.yml`).
 
-1. Clone the repository on the server.
-2. Edit `docker-compose.yml`: set `APP_ORIGIN` to your public URL, and SMTP settings if you want real emails.
-3. Create the data folder for the app's user (uid 1000): `mkdir -p data && chown 1000:1000 data`.
-4. Run `docker compose up -d --build`.
-5. Point your cloudflared tunnel's public hostname at `http://<server IP>:80`.
+One-time setup:
 
-To update: `git pull && docker compose up -d --build`.
+1. **Registry login.** The image is private. On GitHub, create a classic personal access token with only the `read:packages` scope. In Dockhand, add a registry: `ghcr.io`, your GitHub username, and that token.
+2. **Stack.** In Dockhand, create a stack named `calendar` and paste in `docker-compose.yml`.
+3. **Environment variables** on the stack:
+   - `APP_ORIGIN` (required): your public URL, e.g. `https://cal.example.com`. Passkeys and email links depend on it.
+   - Optional: `APP_NAME`, `SIGNUP_MODE`, `SMTP_URL`, `MAIL_FROM` (see the table below).
+4. **Deploy** the stack.
+5. **Tunnel.** Point your cloudflared public hostname at `http://<LXC IP>:80`.
+6. Open the site and create the first account. It becomes the founding user.
+
+To update: push to `main`, wait for the Image workflow to finish, then pull and redeploy the stack in Dockhand.
+
+Without Dockhand: `APP_ORIGIN=https://cal.example.com docker compose up -d` (add `--build` to build the image locally).
 
 Settings the container already includes:
 
@@ -48,7 +55,7 @@ Cloudflare dashboard settings:
 
 Private files are served with `Cache-Control: private`, so Cloudflare never caches them.
 
-**Back up the `data/` folder.** It holds the database (`app.db`) and every uploaded file.
+**Back up the `app_data` volume.** It holds the database (`app.db`) and every uploaded file. It lives under `/var/lib/docker/volumes/` on the LXC, so Proxmox backups of the container include it.
 
 ## Environment variables
 

@@ -15,9 +15,9 @@ See [FEATURES.md](FEATURES.md) for the full feature list. Section numbers below 
 
 ## Deployment: Cloudflare Tunnel → Caddy → app
 
-Path: `cloudflared` → `http://<server IP>:80` (Caddy) → `app:3000`. Caddy and the app run together from `docker-compose.yml`; only Caddy's port 80 is published, and the app is reachable only on the internal Compose network. The target is a Debian 13 Docker LXC on Proxmox (community "Docker" script, unprivileged).
+Path: `cloudflared` → `http://<server IP>:80` (Caddy) → `app:3000`. Caddy and the app run together as one Dockhand stack from `docker-compose.yml`, which is self-contained (inline Caddyfile, named volumes). Only Caddy's port 80 is published, and the app is reachable only on the stack's internal network. The target is a Docker LXC on Proxmox managed with Dockhand. GitHub Actions builds the image to `ghcr.io/forrestpowers/timetree-clone` on every push to `main`.
 
-Cloudflare handles TLS at its edge, so Caddy listens on plain HTTP. The `Caddyfile` answers on `:80` for any hostname (only the tunnel reaches it), so the domain is set in one place: `APP_ORIGIN`.
+Cloudflare handles TLS at its edge, so Caddy listens on plain HTTP. The Caddyfile answers on `:80` for any hostname (only the tunnel reaches it), so the domain is set in one place: `APP_ORIGIN`.
 
 What the app has to handle:
 
@@ -102,7 +102,7 @@ Moved to Phase 6: "Remind members" needs push notifications.
 
 What's built:
 
-- **Live updates:** every change is pushed to open pages over server-sent events (`/api/stream`), so calendars, chat, memos and the activity feed refresh on their own. Caddy must not buffer or compress that path (see `Caddyfile.example`).
+- **Live updates:** every change is pushed to open pages over server-sent events (`/api/stream`), so calendars, chat, memos and the activity feed refresh on their own. Caddy must not buffer or compress that path (see the Caddyfile in `docker-compose.yml`).
 - **Activity tab** with an unread badge. It lists changes across your calendars (or one calendar), groups new items at the top, and shows old and new dates when an event moves.
 - **Comments** on events and memos, with up to 4 photos each. Authors can edit; authors and calendar owners can delete.
 - **Likes and reactions:** a like (❤️) on events and memos shows in the activity feed. Eight emoji reactions work on events, comments and chat messages.
