@@ -7,7 +7,7 @@
 
 <svelte:head><title>Edit event</title></svelte:head>
 
-{#key data.event.id}
+{#key data.event.id + (data.occurrenceStartAt ?? '')}
 	<EventForm
 		event={data.event}
 		calendars={data.calendars}
@@ -16,6 +16,7 @@
 		virtualMembers={data.virtualMembers}
 		initialCalendarId={data.event.calendarId}
 		initialDate=""
+		occurrenceStartAt={data.occurrenceStartAt}
 		tz={data.tz}
 	/>
 {/key}

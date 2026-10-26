@@ -259,6 +259,13 @@ export const labels = sqliteTable(
 	(t) => [index('labels_cal_idx').on(t.calendarId)]
 );
 
+/** Day counter shown on an event: "12 days left until…" or "Day 100 since…". */
+export type DayCount = {
+	mode: 'until' | 'since';
+	/** How often to remind; reminders are delivered with notifications (Phase 6) */
+	interval: 'none' | 'weekly' | 'monthly' | 'yearly' | 'hundred_days';
+};
+
 export const events = sqliteTable(
 	'events',
 	{
@@ -289,6 +296,14 @@ export const events = sqliteTable(
 		parentId: text('parent_id'),
 		recurrenceStartAt: integer('recurrence_start_at'),
 		memoOrder: integer('memo_order'),
+		// Pinned events sort to the top of a busy day. `pinnedAt` pins every occurrence;
+		// `pinnedOccurrences` pins single occurrences of a repeating event (their start instants).
+		pinnedAt: integer('pinned_at'),
+		pinnedOccurrences: text('pinned_occurrences', { mode: 'json' })
+			.$type<number[]>()
+			.notNull()
+			.default([]),
+		dayCount: text('day_count', { mode: 'json' }).$type<DayCount | null>(),
 		createdByMemberId: text('created_by_member_id'),
 		externalUuid: text('external_uuid'),
 		createdAt: createdAt(),
@@ -331,6 +346,36 @@ export const eventAlerts = sqliteTable(
 		minutesBefore: integer('minutes_before').notNull()
 	},
 	(t) => [primaryKey({ columns: [t.eventId, t.minutesBefore] })]
+);
+
+export const eventChecklistItems = sqliteTable(
+	'event_checklist_items',
+	{
+		id: id(),
+		eventId: text('event_id')
+			.notNull()
+			.references(() => events.id, { onDelete: 'cascade' }),
+		text: text('text').notNull(),
+		done: integer('done', { mode: 'boolean' }).notNull().default(false),
+		doneByMemberId: text('done_by_member_id'),
+		doneAt: integer('done_at'),
+		sortOrder: integer('sort_order').notNull().default(0)
+	},
+	(t) => [index('checklist_event_idx').on(t.eventId)]
+);
+
+export const eventFiles = sqliteTable(
+	'event_files',
+	{
+		eventId: text('event_id')
+			.notNull()
+			.references(() => events.id, { onDelete: 'cascade' }),
+		fileId: text('file_id')
+			.notNull()
+			.references(() => files.id, { onDelete: 'cascade' }),
+		sortOrder: integer('sort_order').notNull().default(0)
+	},
+	(t) => [primaryKey({ columns: [t.eventId, t.fileId] })]
 );
 
 export const ACTIVITY_TYPES = [

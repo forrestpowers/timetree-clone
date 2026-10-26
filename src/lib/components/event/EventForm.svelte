@@ -12,6 +12,16 @@
 	import StickyNote from '@lucide/svelte/icons/sticky-note';
 	import Tag from '@lucide/svelte/icons/tag';
 	import Users from '@lucide/svelte/icons/users';
+	import Repeat from '@lucide/svelte/icons/repeat';
+	import ListChecks from '@lucide/svelte/icons/list-checks';
+	import Paperclip from '@lucide/svelte/icons/paperclip';
+	import Hourglass from '@lucide/svelte/icons/hourglass';
+	import Plus from '@lucide/svelte/icons/plus';
+	import X from '@lucide/svelte/icons/x';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { describeRepeat, isRecurring } from '#lib/recurrence.js';
+	import { fileSize } from '#lib/event-format.js';
+	import RepeatPicker from './RepeatPicker.svelte';
 	import { api } from '#lib/api.js';
 	import { dateToUtcMs, timeOf, utcMsToDate, dayKey, zonedToUtc, DAY_MS } from '#lib/dates.js';
 	import { ALL_DAY_ALERTS, TIMED_ALERTS, alertLabel, VIRTUAL_PRESETS } from '#lib/meta.js';
@@ -25,6 +35,8 @@
 		Attendee,
 		ClientCalendar,
 		ClientEvent,
+		DayCount,
+		EventFile,
 		ClientLabel,
 		ClientMember,
 		ClientVirtualMember
@@ -38,9 +50,14 @@
 		virtualMembers,
 		initialCalendarId,
 		initialDate,
-		tz
+		tz,
+		occurrenceStartAt = null,
+		initialTitle = ''
 	}: {
 		event?: ClientEvent | null;
+		/** When editing one occurrence of a repeating event, its original start */
+		occurrenceStartAt?: number | null;
+		initialTitle?: string;
 		calendars: ClientCalendar[];
 		labels: ClientLabel[];
 		members: ClientMember[];
@@ -81,7 +98,15 @@
 				alerts: event.alerts,
 				locationName: event.locationName,
 				url: event.url,
-				note: event.note
+				note: event.note,
+				recurrence: event.recurrence,
+				checklist: event.checklist.map((c) => ({
+					id: c.id as string | undefined,
+					text: c.text,
+					done: c.done
+				})),
+				files: event.files,
+				dayCount: event.dayCount
 			};
 		}
 		const cal = calendars.find((c) => c.id === initialCalendarId) ?? calendars[0];
@@ -90,7 +115,7 @@
 		const calLabels = labels.filter((l) => l.calendarId === cal.id);
 		return {
 			calendarId: cal.id,
-			title: '',
+			title: initialTitle.slice(0, 100),
 			allDay: false,
 			startDate: initialDate,
 			endDate: initialDate,
@@ -105,7 +130,11 @@
 			alerts: [] as number[],
 			locationName: '',
 			url: '',
-			note: ''
+			note: '',
+			recurrence: [] as string[],
+			checklist: [] as { id?: string; text: string; done: boolean }[],
+			files: [] as EventFile[],
+			dayCount: null as DayCount | null
 		};
 	});
 
@@ -123,6 +152,12 @@
 	let locationName = $state(init.locationName);
 	let url = $state(init.url);
 	let note = $state(init.note);
+	let recurrence = $state<string[]>(init.recurrence);
+	let checklist = $state(init.checklist);
+	let attachedFiles = $state<EventFile[]>(init.files);
+	let dayCount = $state<DayCount | null>(init.dayCount);
+	let newItem = $state('');
+	let uploading = $state(0);
 	let saving = $state(false);
 	let saved = false;
 
@@ -141,7 +176,11 @@
 			alerts,
 			locationName,
 			url,
-			note
+			note,
+			recurrence,
+			checklist,
+			attachedFiles.map((f) => f.id),
+			dayCount
 		]);
 	const initialSnapshot = snapshot();
 
@@ -206,7 +245,9 @@
 	});
 
 	// ---- sheets ----
-	let open = $state<'calendar' | 'label' | 'attendees' | 'alerts' | 'tz' | null>(null);
+	let open = $state<
+		'calendar' | 'label' | 'attendees' | 'alerts' | 'tz' | 'repeat' | 'scope' | null
+	>(null);
 	const sheet = (name: typeof open) => () => (open = name);
 	const zones =
 		typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['UTC'];
@@ -228,10 +269,102 @@
 	}
 	const alertPresets = $derived(allDay ? ALL_DAY_ALERTS : TIMED_ALERTS);
 
-	async function save() {
+	// ---- checklist ----
+	function addItem() {
+		const text = newItem.trim();
+		if (!text) return;
+		if (checklist.length >= 100) return toast('No more items can be added.', 'error');
+		checklist = [...checklist, { text: text.slice(0, 200), done: false }];
+		newItem = '';
+	}
+
+	// ---- attachments ----
+	const ACCEPT = '.pdf,.png,.jpg,.jpeg,.heic,.heif,.gif,.txt,.docx,.pptx,.xlsx';
+	async function attach(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		for (const file of [...(input.files ?? [])]) {
+			if (attachedFiles.length >= 10) {
+				toast('Up to 10 files per event.', 'error');
+				break;
+			}
+			if (file.size > 10 * 1024 * 1024) {
+				toast(`${file.name}: the file size exceeds the 10MB limit.`, 'error');
+				continue;
+			}
+			uploading++;
+			try {
+				const form = new FormData();
+				form.set('file', file);
+				form.set('calendarId', calendarId);
+				const res = await api<{ id: string; name: string; size: number }>(
+					'/api/events/attachments',
+					'POST',
+					form
+				);
+				attachedFiles = [
+					...attachedFiles,
+					{ id: res.id, name: res.name, size: res.size, mime: file.type }
+				];
+			} catch (err) {
+				toast(`${file.name}: ${(err as Error).message}`, 'error');
+			} finally {
+				uploading--;
+			}
+		}
+		input.value = '';
+	}
+
+	// ---- double-booking warning ----
+	let conflicts = $state<{ attendeeId: string; title: string }[]>([]);
+	$effect(() => {
+		const ids = attendees.map((a) => a.id);
+		if (allDay || invalidRange || !ids.length || !startDate || !endDate) {
+			conflicts = [];
+			return;
+		}
+		const body = {
+			calendarId,
+			attendeeIds: ids,
+			startAt: zonedToUtc(startDate, startTime || '00:00', eventTz),
+			endAt: zonedToUtc(endDate, endTime || '00:00', eventTz),
+			excludeEventId: event?.id ?? null
+		};
+		const timer = setTimeout(() => {
+			api<{ attendeeId: string; title: string }[]>('/api/events/conflicts', 'POST', body)
+				.then((list) => (conflicts = list))
+				.catch(() => (conflicts = []));
+		}, 400);
+		return () => clearTimeout(timer);
+	});
+	const conflictText = $derived.by(() => {
+		const names = new Map([
+			...calMembers.map((m) => [m.id, m.name] as const),
+			...calVirtual.map((v) => [v.id, v.name] as const)
+		]);
+		const byPerson = Object.groupBy(conflicts, (c) => c.attendeeId);
+		return Object.entries(byPerson).map(
+			([id, list]) =>
+				`${names.get(id) ?? 'Someone'} is attending ${[...new Set((list ?? []).map((c) => c.title))].join(', ')}`
+		);
+	});
+
+	// ---- repeating events: ask what the edit applies to ----
+	const editingOccurrence = $derived(!!event && isRecurring(event) && occurrenceStartAt != null);
+	const ruleChanged = $derived(!!event && recurrence.join('\n') !== event.recurrence.join('\n'));
+	function save() {
 		if (!title.trim()) return toast('No title entered.', 'error');
 		if (invalidRange)
 			return toast('The start date/time must be before the end date/time.', 'error');
+		if (uploading) return toast('Please save after the file is uploaded.', 'error');
+		if (editingOccurrence) {
+			open = 'scope';
+			return;
+		}
+		return submit('all');
+	}
+
+	async function submit(scope: 'this' | 'future' | 'all') {
+		open = null;
 		saving = true;
 		const body = {
 			calendarId,
@@ -248,7 +381,13 @@
 			note,
 			labelId,
 			attendees,
-			alerts
+			alerts,
+			recurrence,
+			checklist,
+			fileIds: attachedFiles.map((f) => f.id),
+			dayCount,
+			scope,
+			occurrenceStartAt
 		};
 		try {
 			const res = event
@@ -256,8 +395,15 @@
 				: await api<{ id: string }>('/api/events', 'POST', body);
 			saved = true;
 			const month = startDate.slice(0, 7);
-			if (event) goto(`/events/${res.id}`, { replace: true, refreshAll: true });
-			else
+			if (event) {
+				// After "edit all" on an occurrence, reopen the occurrence at its new time
+				const newStart = allDay
+					? dateToUtcMs(startDate)
+					: zonedToUtc(startDate, startTime, eventTz);
+				const at =
+					scope === 'all' && editingOccurrence && recurrence.length ? `?at=${newStart}` : '';
+				goto(`/events/${res.id}${at}`, { replace: true, refreshAll: true });
+			} else
 				goto(`/c/${document.cookie.includes('lastCal=all') ? 'all' : calendarId}?month=${month}`, {
 					replace: true,
 					refreshAll: true
@@ -380,6 +526,40 @@
 			>
 			<ChevronRight size={18} class="text-muted" />
 		</button>
+		<button class="list-row" onclick={sheet('repeat')}>
+			<Repeat size={20} class="text-muted" />
+			<span class={['flex-1 truncate', !recurrence.length && 'text-muted']}
+				>{describeRepeat(recurrence, startDate)}</span
+			>
+			<ChevronRight size={18} class="text-muted" />
+		</button>
+		<div class="list-row">
+			<Hourglass size={20} class="text-muted" />
+			<span class="flex-1">Day counter</span>
+			<Toggle
+				label="Day counter"
+				checked={!!dayCount}
+				onchange={(v) => (dayCount = v ? { mode: 'until', interval: 'none' } : null)}
+			/>
+		</div>
+		{#if dayCount}
+			<div class="flex flex-wrap items-center gap-2 px-4 pb-3 pl-12 text-sm">
+				<select class="rounded-lg border-border bg-surface py-1 text-sm" bind:value={dayCount.mode}>
+					<option value="until">Count down to the day</option>
+					<option value="since">Count up from the day</option>
+				</select>
+				<select
+					class="rounded-lg border-border bg-surface py-1 text-sm"
+					bind:value={dayCount.interval}
+				>
+					<option value="none">No reminders</option>
+					<option value="weekly">Remind weekly</option>
+					<option value="monthly">Remind monthly</option>
+					<option value="yearly">Remind yearly</option>
+					<option value="hundred_days">Every 100 days</option>
+				</select>
+			</div>
+		{/if}
 	</div>
 
 	<div class="mt-3 divide-y divide-border border-y border-border bg-surface">
@@ -401,6 +581,17 @@
 			{/if}
 			<ChevronRight size={18} class="text-muted" />
 		</button>
+		{#if conflictText.length}
+			<div
+				class="flex gap-2 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400"
+			>
+				<TriangleAlert size={16} class="mt-0.5 shrink-0" />
+				<div>
+					<p class="font-medium">A member is attending another event</p>
+					{#each conflictText as line (line)}<p class="text-xs">{line}</p>{/each}
+				</div>
+			</div>
+		{/if}
 		<label class="list-row">
 			<MapPin size={20} class="text-muted" />
 			<input
@@ -430,6 +621,71 @@
 				bind:value={note}></textarea>
 		</label>
 	</div>
+
+	<p class="section-title flex items-center gap-1.5"><ListChecks size={14} /> To-do list</p>
+	<div class="divide-y divide-border border-y border-border bg-surface">
+		{#each checklist as item, i (i)}
+			<div class="flex items-center gap-3 px-4 py-2">
+				<input
+					type="checkbox"
+					class="size-5 rounded text-accent"
+					bind:checked={item.done}
+					aria-label="Done"
+				/>
+				<input
+					class={[
+						'min-w-0 flex-1 border-0 bg-transparent p-0 focus:ring-0',
+						item.done && 'text-muted line-through'
+					]}
+					maxlength="200"
+					bind:value={item.text}
+				/>
+				<button
+					class="icon-btn size-8 text-muted"
+					onclick={() => (checklist = checklist.filter((_, j) => j !== i))}
+					aria-label="Remove item"><X size={16} /></button
+				>
+			</div>
+		{/each}
+		<form
+			class="flex items-center gap-3 px-4 py-2"
+			onsubmit={(e) => {
+				e.preventDefault();
+				addItem();
+			}}
+		>
+			<Plus size={20} class="text-muted" />
+			<input
+				class="min-w-0 flex-1 border-0 bg-transparent p-0 focus:ring-0"
+				placeholder="Add an item"
+				maxlength="200"
+				bind:value={newItem}
+				onblur={addItem}
+			/>
+		</form>
+	</div>
+
+	<p class="section-title flex items-center gap-1.5"><Paperclip size={14} /> Attachments</p>
+	<div class="divide-y divide-border border-y border-border bg-surface">
+		{#each attachedFiles as f (f.id)}
+			<div class="flex items-center gap-3 px-4 py-2.5">
+				<Paperclip size={18} class="shrink-0 text-muted" />
+				<span class="min-w-0 flex-1 truncate">{f.name}</span>
+				<span class="text-xs text-muted">{fileSize(f.size)}</span>
+				<button
+					class="icon-btn size-8 text-muted"
+					onclick={() => (attachedFiles = attachedFiles.filter((x) => x.id !== f.id))}
+					aria-label="Remove attachment"><X size={16} /></button
+				>
+			</div>
+		{/each}
+		<label class="list-row cursor-pointer text-accent">
+			<Plus size={20} />
+			{uploading ? 'Uploading…' : 'Attach files'}
+			<input type="file" multiple accept={ACCEPT} class="hidden" onchange={attach} />
+		</label>
+	</div>
+	<p class="px-4 pt-2 text-xs text-muted">PDF, images, text and Office files, up to 10 MB each.</p>
 </main>
 
 <Sheet open={open === 'calendar'} onclose={() => (open = null)} title="Calendar">
@@ -532,6 +788,28 @@
 	{#snippet footer()}<button class="btn btn-primary w-full" onclick={() => (open = null)}
 			>Done</button
 		>{/snippet}
+</Sheet>
+
+<Sheet open={open === 'repeat'} onclose={() => (open = null)} title="Repeat">
+	<RepeatPicker
+		{recurrence}
+		{startDate}
+		onchange={(lines) => {
+			recurrence = lines;
+			open = null;
+		}}
+	/>
+</Sheet>
+
+<Sheet open={open === 'scope'} onclose={() => (open = null)} title="This is a repeating event">
+	<p class="px-5 pb-3 text-sm text-muted">Which events should this change apply to?</p>
+	<div class="divide-y divide-border border-t border-border">
+		{#if !ruleChanged}
+			<button class="list-row" onclick={() => submit('this')}>Edit this event only</button>
+		{/if}
+		<button class="list-row" onclick={() => submit('future')}>Edit this and future events</button>
+		<button class="list-row" onclick={() => submit('all')}>Edit all repeating events</button>
+	</div>
 </Sheet>
 
 <Sheet open={open === 'tz'} onclose={() => (open = null)} title="Time zone">

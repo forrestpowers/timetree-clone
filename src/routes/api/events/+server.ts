@@ -7,6 +7,6 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const parsed = eventInput.safeParse(await request.json());
 	if (!parsed.success) error(400, parsed.error.issues[0]?.message ?? 'Invalid event');
 	const member = requireMember(locals.user!.id, parsed.data.calendarId);
-	const id = createEvent(member, parsed.data);
+	const id = createEvent(member, parsed.data, locals.user!.id);
 	return json({ id });
 };

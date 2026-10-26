@@ -4,11 +4,19 @@ import type {
 	CalendarBackground,
 	CalendarPurpose,
 	CalendarView,
+	DayCount,
 	NotifyMode,
 	UserSettings
 } from '#lib/server/db/schema.js';
 
-export type { CalendarBackground, CalendarPurpose, CalendarView, NotifyMode, UserSettings };
+export type {
+	CalendarBackground,
+	CalendarPurpose,
+	CalendarView,
+	DayCount,
+	NotifyMode,
+	UserSettings
+};
 
 export type ClientUser = {
 	id: string;
@@ -81,6 +89,13 @@ export type ClientLabel = {
 };
 
 export type Attendee = { id: string; type: 'member' | 'virtual' };
+export type ChecklistItem = {
+	id: string;
+	text: string;
+	done: boolean;
+	doneByMemberId: string | null;
+};
+export type EventFile = { id: string; name: string; mime: string; size: number };
 
 export type ClientEvent = {
 	id: string;
@@ -99,8 +114,15 @@ export type ClientEvent = {
 	note: string;
 	labelId: string | null;
 	recurrence: string[];
+	/** Set on events split off a repeating series */
+	parentId: string | null;
 	attendees: Attendee[];
 	alerts: number[];
+	checklist: ChecklistItem[];
+	files: EventFile[];
+	pinnedAt: number | null;
+	pinnedOccurrences: number[];
+	dayCount: DayCount | null;
 	createdByMemberId: string | null;
 	createdAt: number;
 	updatedAt: number;

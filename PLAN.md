@@ -63,6 +63,7 @@ Notes from building it:
 **More → Import from TimeTree** takes the per-calendar JSON files from the export (`timetree_cal_<id>.json`), shows a preview, and imports into a new or existing calendar.
 
 What it brings over:
+
 - Labels, mapped by TimeTree label id and then by color.
 - Events and memos, with all-day/timed handling, time zones, location and coordinates, URL, note and reminders.
 - Repeat rules and links between exceptions and their series.
@@ -70,6 +71,7 @@ What it brings over:
 - TimeTree users, each mapped to "me", a virtual member, or left out.
 
 Behavior:
+
 - Re-importing skips events already imported, matched by TimeTree UUID.
 - Deleted events are skipped. Birthdays are skipped too, because the app generates them from profiles.
 - The JSON export has no comments or images, so those can't be imported.
@@ -78,9 +80,29 @@ Verified against the real export (calendar 26406140): 2,561 events, 1,030 all-da
 
 The export's other file, "Primary Calendar" (26406130), was deleted in TimeTree and contains no events.
 
-## Phase 3: the rest of events
+## Phase 3: the rest of events ✅
 
-Recurrence editing (this/future/all), checklists, file attachments, pins, day counters, copy and multi-date copy, drag/drop, quick-create history, double-booking warning, folded duplicates, share as text/QR, remind members, birthdays (§5).
+What's built:
+
+- **Repeating events:** daily, weekly with chosen weekdays, monthly by date or by "nth weekday", and yearly; any interval; ending never, on a date, or after N times.
+  - Rules are stored as RRULE/EXDATE and expanded in wall-clock time, so a 9:00 event stays at 9:00 across daylight-saving changes.
+  - Editing or deleting asks: this event only, this and future, or all.
+  - "This only" excludes the occurrence (EXDATE) and saves it as a linked standalone event.
+  - "This and future" ends the old series and starts a new one, keeping a COUNT correct across the split.
+  - "All" shifts the whole series when you edit one occurrence's time.
+- **To-do lists** on events. Anyone in the calendar can tick items, and the list shows who ticked each one.
+- **Attachments:** pdf, images, txt, docx, pptx, xlsx, up to 10 MB each and 10 per event, free for everyone.
+- **Pins:** pin all occurrences or just one. Pinned events go ahead of other single-day events on a busy day.
+- **Day counter:** count down to an event or up from it. Reminder intervals are saved; they're delivered in Phase 6.
+- **Copying:** to another calendar (label matched by color, you as attendee, to-do items unticked) or to up to 31 dates in the same calendar, keeping the local time.
+- **Drag and drop** in month view: long-press an event, drop it on another day, then choose Move or Copy. Moving one occurrence of a repeating event detaches only that occurrence.
+- **Quick-create:** long-press an empty day to see your most-used event shapes and add one with a tap. When you have no history yet, starter titles appear instead.
+- **Double-booking warning** in the editor. Events of 24 hours or longer don't count.
+- **Folded duplicates:** in All Calendars, identical events from different calendars show once, with a "+n" badge.
+- **Sharing:** as text (now including the repeat rule and to-do list) and via a QR code that links to the event.
+- **Birthdays:** members' and virtual members' birthdays appear yearly (each person once, even across calendars), with their age. Feb 29 birthdays fall on Feb 28 in other years. Each calendar has a setting to hide them.
+
+Moved to Phase 6: "Remind members" needs push notifications.
 
 ## Phase 4: collaboration
 
@@ -92,7 +114,7 @@ Week, 2-week, list, daily sheet, vertical 1/3/7-day timeline, height modes, font
 
 ## Phase 6: notifications and sync
 
-Web push for alerts, Today's Events digest, per-calendar notification modes, activity/chat pushes, day-counter pushes (§12); ICS subscribe overlay, .ics import, ICS export feeds, JSON backup and restore (§13).
+Web push for alerts, Today's Events digest, per-calendar notification modes, activity/chat pushes, day-counter pushes, "remind members" nudges (§12); ICS subscribe overlay, .ics import, ICS export feeds, JSON backup and restore (§13).
 
 ## Phase 7: album and sharing
 

@@ -6,6 +6,8 @@ export type Placeable = {
 	startAt: number | null;
 	endAt: number | null;
 	title: string;
+	/** Pinned events go to the top of a busy day */
+	pinned?: boolean;
 };
 
 export type Bar<T> = {
@@ -31,8 +33,8 @@ export type WeekLayout<T> = {
 /**
  * Lay out events over a month grid (weeks of 7 day keys) the way a wall calendar
  * does: multi-day and all-day bars first, packed into the lowest free lane.
- * `maxLanes` is how many rows of bars fit in a cell; when a day has more, the last
- * row shows "+n" instead.
+ * Pinned events come next, ahead of other single-day events. `maxLanes` is how many
+ * rows of bars fit in a cell; when a day has more, the last row shows "+n" instead.
  */
 export function layoutMonth<T extends Placeable>(
 	days: string[],
@@ -59,7 +61,10 @@ export function layoutMonth<T extends Placeable>(
 			})
 			.sort(
 				(a, b) =>
-					Number(b.multi || b.item.allDay) - Number(a.multi || a.item.allDay) ||
+					// Multi-day bars keep their row; pins jump ahead of other single-day events
+					Number(b.multi) - Number(a.multi) ||
+					Number(!!b.item.pinned) - Number(!!a.item.pinned) ||
+					Number(b.item.allDay) - Number(a.item.allDay) ||
 					a.col - b.col ||
 					b.span - a.span ||
 					(a.item.startAt ?? 0) - (b.item.startAt ?? 0) ||
@@ -107,6 +112,7 @@ export function layoutMonth<T extends Placeable>(
 				.filter((p) => c >= p.col && c < p.col + p.span)
 				.sort(
 					(a, b) =>
+						Number(!!b.item.pinned) - Number(!!a.item.pinned) ||
 						Number(b.item.allDay || b.multi) - Number(a.item.allDay || a.multi) ||
 						(a.item.startAt ?? 0) - (b.item.startAt ?? 0)
 				)

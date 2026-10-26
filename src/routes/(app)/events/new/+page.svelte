@@ -15,6 +15,7 @@
 		virtualMembers={data.virtualMembers}
 		initialCalendarId={data.initialCalendarId}
 		initialDate={data.initialDate}
+		initialTitle={data.initialTitle}
 		tz={data.tz}
 	/>
 {/key}

@@ -76,3 +76,16 @@ describe('layoutMonth', () => {
 		expect(week.perDay[3]).toHaveLength(5);
 	});
 });
+
+describe('pins', () => {
+	it('puts pinned events first so they stay visible on busy days', () => {
+		const days = monthGrid('2026-10', 0);
+		const items = ['a', 'b', 'c', 'd'].map((id) => ({
+			...timed(id, '2026-10-07', '09:00', '10:00', 'UTC'),
+			pinned: id === 'd'
+		}));
+		const week = layoutMonth(days, items, 'UTC', 2)[1];
+		expect(week.bars.map((b) => b.item.id)).toEqual(['d']);
+		expect(week.perDay[3][0].id).toBe('d');
+	});
+});

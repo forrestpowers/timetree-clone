@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, preloadData } from '$app/navigation';
+	import { goto, invalidate, preloadData } from '$app/navigation';
 	import { page } from '$app/state';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -8,7 +8,10 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import Check from '@lucide/svelte/icons/check';
+	import History from '@lucide/svelte/icons/history';
 	import {
+		DAY_MS,
+		dateToUtcMs,
 		eventDayRange,
 		formatDayKey,
 		formatMonth,
@@ -16,18 +19,20 @@
 		todayKey,
 		addDaysToKey
 	} from '#lib/dates.js';
+	import { api } from '#lib/api.js';
+	import { buildItems, daysBetween, eventToInput, type CalendarItem } from '#lib/calendar-items.js';
+	import { isRecurring } from '#lib/recurrence.js';
+	import { toast } from '#lib/toast.svelte.js';
 	import { purposeOf } from '#lib/meta.js';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import MonthGrid from '#lib/components/calendar/MonthGrid.svelte';
 	import EventRow from '#lib/components/calendar/EventRow.svelte';
 	import Sheet from '#lib/components/Sheet.svelte';
-	import type { ClientEvent } from '#lib/types.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	const today = $derived(todayKey(data.tz));
-	const labelById = $derived(new Map(data.labels.map((l) => [l.id, l])));
 	const calendarById = $derived(new Map(data.calendars.map((c) => [c.id, c])));
 	const people = $derived(
 		new Map([
@@ -43,7 +48,19 @@
 		data.calendar ? data.members.filter((m) => m.calendarId === data.calendar!.id) : []
 	);
 
-	const colorOf = (e: ClientEvent) => (e.labelId && labelById.get(e.labelId)?.color) || '#9aa3a0';
+	// Expanded occurrences, birthdays and folded duplicates for the visible grid
+	const items = $derived(
+		buildItems({
+			events: data.events,
+			labels: data.labels,
+			members: data.members,
+			virtualMembers: data.virtualMembers,
+			calendars: data.calendar ? [data.calendar] : data.calendars,
+			from: dateToUtcMs(data.days[0]) - DAY_MS,
+			to: dateToUtcMs(data.days[41]) + 2 * DAY_MS,
+			fold: !data.calendar
+		})
+	);
 
 	// The selected day lives in history state, so Back closes the day sheet
 	const selected = $derived((page.state as { day?: string }).day ?? null);
@@ -81,15 +98,122 @@
 		preloadData(monthHref(shiftMonth(data.month, -1)));
 	});
 
-	const dayEvents = $derived.by(() => {
+	const dayItems = $derived.by(() => {
 		if (!selected) return [];
-		return data.events
-			.filter((e) => {
-				const r = eventDayRange(e, data.tz);
+		// The day list shows every copy, so unfold
+		return buildItems({
+			events: data.events,
+			labels: data.labels,
+			members: data.members,
+			virtualMembers: data.virtualMembers,
+			calendars: data.calendar ? [data.calendar] : data.calendars,
+			from: dateToUtcMs(selected) - DAY_MS,
+			to: dateToUtcMs(selected) + 2 * DAY_MS,
+			fold: false
+		})
+			.filter((i) => {
+				const r = eventDayRange(i, data.tz);
 				return r && r[0] <= selected && r[1] >= selected;
 			})
-			.sort((a, b) => Number(b.allDay) - Number(a.allDay) || (a.startAt ?? 0) - (b.startAt ?? 0));
+			.sort(
+				(a, b) =>
+					Number(b.pinned) - Number(a.pinned) ||
+					Number(!!b.birthday) - Number(!!a.birthday) ||
+					Number(b.allDay) - Number(a.allDay) ||
+					a.startAt - b.startAt
+			);
 	});
+
+	// ---- calendar used for quick actions in All Calendars ----
+	const actionCalendarId = $derived(
+		data.calendar?.id ?? data.calendars.find((c) => c.me.visible)?.id ?? data.calendars[0]?.id
+	);
+	const myMemberId = (calendarId: string) =>
+		data.members.find((m) => m.calendarId === calendarId && m.isMe)?.id ?? null;
+
+	// ---- drag and drop: move or copy to another day ----
+	let dropping = $state<{ item: CalendarItem; from: string; to: string } | null>(null);
+	async function finishDrop(mode: 'move' | 'copy') {
+		const d = dropping;
+		dropping = null;
+		if (!d?.item.event) return;
+		const ev = d.item.event;
+		const shift = daysBetween(d.from, d.to);
+		try {
+			if (mode === 'copy') {
+				await api(`/api/events/${ev.id}/copy`, 'POST', {
+					dates: [addDaysToKey(eventStartDay(ev), shift)],
+					occurrenceStartAt: ev.occurrenceStartAt
+				});
+				toast('Copy completed');
+			} else {
+				const repeating = isRecurring(ev) && ev.occurrenceStartAt != null;
+				await api(`/api/events/${ev.id}`, 'PUT', {
+					...eventToInput(ev, shift),
+					// Moving one occurrence detaches it from the series
+					scope: repeating ? 'this' : 'all',
+					occurrenceStartAt: ev.occurrenceStartAt
+				});
+				toast(repeating ? 'Moved this occurrence' : 'Event moved');
+			}
+			await invalidate('app:events');
+		} catch (err) {
+			toast((err as Error).message, 'error');
+		}
+	}
+	const eventStartDay = (ev: CalendarItem['event'] & {}) => eventDayRange(ev, data.tz)?.[0] ?? '';
+
+	// ---- long press on a day: one-tap creation from recent events ----
+	type Template = {
+		title: string;
+		allDay: boolean;
+		startTime: string | null;
+		endTime: string | null;
+		days: number;
+		tz: string;
+		labelId: string | null;
+		uses: number;
+	};
+	let quickDay = $state<string | null>(null);
+	let templates = $state<Template[]>([]);
+	let templatesFor = '';
+	async function openQuick(day: string) {
+		quickDay = day;
+		if (actionCalendarId && templatesFor !== actionCalendarId) {
+			templatesFor = actionCalendarId;
+			templates = await api<Template[]>(
+				`/api/events/templates?calendarId=${actionCalendarId}`
+			).catch(() => []);
+		}
+	}
+	async function createFromTemplate(t: Template) {
+		const day = quickDay!;
+		quickDay = null;
+		const me = myMemberId(actionCalendarId!);
+		try {
+			await api('/api/events', 'POST', {
+				calendarId: actionCalendarId,
+				title: t.title,
+				allDay: t.allDay,
+				startDate: day,
+				endDate: addDaysToKey(day, t.days),
+				startTime: t.startTime ?? undefined,
+				endTime: t.endTime ?? undefined,
+				startTz: t.allDay ? 'UTC' : t.tz,
+				endTz: t.allDay ? 'UTC' : t.tz,
+				labelId: t.labelId,
+				attendees: me ? [{ id: me, type: 'member' }] : []
+			});
+			toast(`"${t.title}" added on ${formatDayKey(day, 'MMM d')}`);
+			templatesFor = '';
+			await invalidate('app:events');
+		} catch (err) {
+			toast((err as Error).message, 'error');
+		}
+	}
+	const PRESETS = ['Date', 'Dentist', 'Day off', 'Part-time job', 'Lunch', 'Pickup'];
+	const labelColor = (id: string | null) =>
+		data.labels.find((l) => l.id === id)?.color ?? '#9AA3A0';
 
 	let switcherOpen = $state(false);
 	const title = $derived(data.calendar?.name ?? 'All Calendars');
@@ -166,15 +290,16 @@
 		<MonthGrid
 			days={data.days}
 			month={data.month}
-			events={data.events}
+			{items}
 			tz={data.tz}
 			{today}
 			{selected}
 			weekStart={data.weekStart}
 			saturdayBlue={data.user?.settings.saturdayBlue ?? true}
-			{colorOf}
 			onselect={select}
 			onswipe={changeMonth}
+			onlongpress={openQuick}
+			ondrop={(item, from, to) => (dropping = { item, from, to })}
 		/>
 	</div>
 </div>
@@ -198,16 +323,18 @@
 				><ChevronRight size={20} /></button
 			>
 		</div>
-		{#if dayEvents.length}
+		{#if dayItems.length}
 			<div class="divide-y divide-border border-t border-border">
-				{#each dayEvents as event (event.id)}
+				{#each dayItems as item (item.id)}
 					<EventRow
-						{event}
+						{item}
 						day={selected}
+						{today}
 						tz={data.tz}
-						color={colorOf(event)}
-						calendarName={data.calendar ? '' : (calendarById.get(event.calendarId)?.name ?? '')}
-						people={event.attendees.map((a) => people.get(a.id)).filter((p) => !!p)}
+						calendarName={data.calendar || !item.event
+							? ''
+							: (calendarById.get(item.event.calendarId)?.name ?? '')}
+						people={(item.event?.attendees ?? []).map((a) => people.get(a.id)).filter((p) => !!p)}
 					/>
 				{/each}
 			</div>
@@ -250,4 +377,68 @@
 		{/each}
 		<a href="/calendars/new" class="list-row text-accent"><Plus size={20} /> Create Calendar</a>
 	</div>
+</Sheet>
+
+<Sheet
+	open={!!dropping}
+	onclose={() => (dropping = null)}
+	title={dropping ? `"${dropping.item.title}" to ${formatDayKey(dropping.to, 'EEE, MMM d')}` : ''}
+>
+	<div class="divide-y divide-border border-t border-border">
+		<button class="list-row" onclick={() => finishDrop('move')}>
+			Move{#if dropping?.item.event && isRecurring(dropping.item.event)}<span
+					class="text-sm text-muted">(only this occurrence)</span
+				>{/if}
+		</button>
+		<button class="list-row" onclick={() => finishDrop('copy')}>Copy</button>
+	</div>
+</Sheet>
+
+<Sheet
+	open={!!quickDay}
+	onclose={() => (quickDay = null)}
+	title={quickDay ? formatDayKey(quickDay, 'EEEE, MMMM d') : ''}
+>
+	{#if quickDay}
+		{#if templates.length}
+			<p class="section-title flex items-center gap-1.5 !pt-0">
+				<History size={14} /> Event history · tap to add
+			</p>
+			<div class="divide-y divide-border border-y border-border">
+				{#each templates as t (t.title + t.startTime + t.days)}
+					<button class="list-row" onclick={() => createFromTemplate(t)}>
+						<span class="w-1.5 self-stretch rounded-full" style:background={labelColor(t.labelId)}
+						></span>
+						<span class="min-w-0 flex-1 truncate text-left">{t.title}</span>
+						<span class="text-xs text-muted"
+							>{t.allDay ? 'All-day' : `${t.startTime}–${t.endTime}`}{t.days
+								? `, ${t.days + 1} days`
+								: ''}</span
+						>
+					</button>
+				{/each}
+			</div>
+		{:else}
+			<p class="px-5 pb-2 text-sm text-muted">
+				Events you create often will show up here for one-tap adding.
+			</p>
+			<div class="flex flex-wrap gap-2 px-5 pb-3">
+				{#each PRESETS as title (title)}
+					<a
+						class="rounded-full border border-border px-3 py-1.5 text-sm"
+						href="/events/new?calendar={actionCalendarId}&date={quickDay}&title={encodeURIComponent(
+							title
+						)}">{title}</a
+					>
+				{/each}
+			</div>
+		{/if}
+		<div class="p-3">
+			<a
+				class="btn btn-primary w-full"
+				href="/events/new?calendar={actionCalendarId}&date={quickDay}"
+				><Plus size={18} /> Create new event</a
+			>
+		</div>
+	{/if}
 </Sheet>

@@ -11,6 +11,7 @@ export const load: PageServerLoad = async ({ parent, url, locals }) => {
 	return {
 		...eventFormData(calendars, locals.user!.id),
 		initialCalendarId: calendars.some((c) => c.id === requested) ? requested! : calendars[0].id,
-		initialDate: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey(tz)
+		initialDate: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayKey(tz),
+		initialTitle: url.searchParams.get('title') ?? ''
 	};
 };
